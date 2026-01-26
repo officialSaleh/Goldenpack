@@ -1,0 +1,7 @@
+{
+  "name": "GoldPack Pro - Sales & Inventory Management",
+  "description": "A high-end enterprise management system for perfume packaging suppliers featuring real-time inventory tracking, credit control, VAT calculation, and automated reporting.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
