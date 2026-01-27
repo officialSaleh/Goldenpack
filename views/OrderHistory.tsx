@@ -1,23 +1,34 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { db } from '../services/mockData';
-import { Clock, Search } from 'lucide-react';
+import { Clock, Search, FileX } from 'lucide-react';
 import { Card, Badge, Input } from '../components/UI';
 
 export const OrderHistory: React.FC = () => {
+  const [searchTerm, setSearchTerm] = useState('');
   const orders = db.getOrders();
+
+  const filteredOrders = orders.filter(o => 
+    o.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    o.customerName.toLowerCase().includes(searchTerm.toLowerCase())
+  );
   
   return (
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold text-slate-900">Order History</h2>
-          <p className="text-slate-500 mt-1">Review all sales transactions.</p>
+          <p className="text-slate-500 mt-1">Review all sales transactions and payment statuses.</p>
         </div>
       </div>
 
       <Card noPadding>
-        <div className="p-4 border-b border-slate-50">
-          <Input icon={<Search size={18} />} placeholder="Search orders by ID or customer..." />
+        <div className="p-6 border-b border-slate-50 bg-slate-50/30">
+          <Input 
+            icon={<Search size={18} />} 
+            placeholder="Search orders by ID or customer name..." 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -32,11 +43,11 @@ export const OrderHistory: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {orders.slice().reverse().map((o) => (
+              {filteredOrders.slice().reverse().map((o) => (
                 <tr key={o.id} className="hover:bg-slate-50 transition-colors group">
-                  <td className="px-8 py-5 font-bold text-slate-900">{o.id}</td>
+                  <td className="px-8 py-5 font-bold text-slate-900 tracking-tight">{o.id}</td>
                   <td className="px-8 py-5 font-medium text-slate-600">{o.customerName}</td>
-                  <td className="px-8 py-5 font-black text-indigo-600">{db.formatMoney(o.total)}</td>
+                  <td className="px-8 py-5 font-black text-brand-gold">{db.formatMoney(o.total)}</td>
                   <td className="px-8 py-5">
                     <Badge color={o.paymentType === 'Cash' ? 'emerald' : 'indigo'}>{o.paymentType}</Badge>
                   </td>
@@ -53,12 +64,18 @@ export const OrderHistory: React.FC = () => {
               ))}
             </tbody>
           </table>
-          {orders.length === 0 && (
-            <div className="py-24 text-center">
-              <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Clock className="text-slate-200" size={32} />
+          
+          {filteredOrders.length === 0 && (
+            <div className="py-32 text-center">
+              <div className="w-20 h-20 bg-slate-50 rounded-[32px] flex items-center justify-center mx-auto mb-6">
+                {searchTerm ? <FileX className="text-slate-200" size={40} /> : <Clock className="text-slate-200" size={40} />}
               </div>
-              <p className="text-slate-400 font-bold">No orders recorded yet</p>
+              <p className="text-slate-900 font-black uppercase tracking-widest text-sm">
+                {searchTerm ? 'No matches found' : 'No orders recorded'}
+              </p>
+              <p className="text-slate-400 text-xs mt-2">
+                {searchTerm ? 'Try adjusting your search criteria' : 'New sales will appear here automatically'}
+              </p>
             </div>
           )}
         </div>

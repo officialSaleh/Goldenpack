@@ -17,8 +17,7 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true,
-    "skipLibCheck": true,
-    "types": ["node"]
+    "skipLibCheck": true
   },
   "include": ["**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules"]
