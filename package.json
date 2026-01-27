@@ -1,16 +1,26 @@
 {
-  "name": "goldenpack-pro",
+  "name": "goldenwings-pro",
   "version": "1.0.0",
+  "type": "module",
   "private": true,
   "scripts": {
-    "build": "echo 'No build step required for ESM-native project.'"
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
   },
   "dependencies": {
-    "@google/genai": "0.21.0",
-    "react": "19.0.0",
-    "react-dom": "19.0.0",
-    "firebase": "11.3.1",
-    "lucide-react": "0.463.0",
-    "recharts": "3.7.0"
+    "@google/genai": "latest",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "firebase": "^11.3.1",
+    "lucide-react": "^0.463.0",
+    "recharts": "^2.15.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.0"
   }
 }

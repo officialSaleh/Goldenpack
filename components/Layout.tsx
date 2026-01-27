@@ -1,8 +1,9 @@
-
 import React, { useState } from 'react';
 import { LogOut, Menu, X, User as UserIcon, ShieldCheck } from 'lucide-react';
 import { NAV_ITEMS } from '../constants.tsx';
 import { CURRENT_USER } from '../services/mockData.ts';
+import { auth } from '../services/firebase.ts';
+import { signOut } from 'firebase/auth';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -15,6 +16,14 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
 
   const filteredNav = NAV_ITEMS.filter(item => item.roles.includes(CURRENT_USER.role));
 
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.error("Logout failed", err);
+    }
+  };
+
   return (
     <div className="flex h-screen bg-brand-bg overflow-hidden">
       {/* Sidebar - Desktop */}
@@ -23,7 +32,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
           <div className="flex items-center space-x-2 text-brand-gold">
             <h1 className="text-2xl font-black tracking-tighter uppercase italic">Golden<span className="text-white">Wings</span></h1>
           </div>
-          <p className="text-[10px] text-brand-gold font-black uppercase tracking-[0.3em] mt-1 opacity-70">Luxury Packaging Suite</p>
+          <p className="text-[10px] text-brand-gold font-black uppercase tracking-[0.3em] mt-1 opacity-70">Sales Management</p>
         </div>
 
         <nav className="flex-1 px-6 space-y-2 mt-4">
@@ -48,19 +57,22 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
         <div className="p-6">
           <div className="flex items-center space-x-3 px-5 py-4 bg-white/5 rounded-3xl mb-4 border border-white/5">
             <div className="w-10 h-10 rounded-2xl bg-brand-gold flex items-center justify-center text-brand-dark font-black text-sm">
-              {CURRENT_USER.name.charAt(0)}
+              {auth.currentUser?.displayName?.charAt(0) || auth.currentUser?.email?.charAt(0) || 'U'}
             </div>
             <div className="flex-1 overflow-hidden">
-              <p className="text-sm font-bold text-white truncate">{CURRENT_USER.name}</p>
+              <p className="text-sm font-bold text-white truncate">{auth.currentUser?.displayName || 'User'}</p>
               <div className="flex items-center space-x-1">
                 <ShieldCheck size={10} className="text-brand-gold" />
-                <p className="text-[9px] text-brand-gold font-black uppercase tracking-widest">{CURRENT_USER.role}</p>
+                <p className="text-[9px] text-brand-gold font-black uppercase tracking-widest">Active</p>
               </div>
             </div>
           </div>
-          <button className="w-full flex items-center space-x-3 px-5 py-3 text-gray-500 hover:text-rose-400 transition-colors text-sm font-bold">
+          <button 
+            onClick={handleLogout}
+            className="w-full flex items-center space-x-3 px-5 py-3 text-gray-500 hover:text-rose-400 transition-colors text-sm font-bold"
+          >
             <LogOut size={18} />
-            <span>Terminate Session</span>
+            <span>Logout</span>
           </button>
         </div>
       </aside>
@@ -94,6 +106,13 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
                 </button>
               ))}
             </nav>
+            <button 
+              onClick={handleLogout}
+              className="mt-auto flex items-center space-x-4 px-6 py-4 text-rose-400 font-bold"
+            >
+              <LogOut size={20} />
+              <span>Logout</span>
+            </button>
           </aside>
         </div>
       )}

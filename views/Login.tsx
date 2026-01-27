@@ -1,11 +1,14 @@
-
 import React, { useState } from 'react';
-import { LogIn, ShieldCheck, AlertCircle, Loader2 } from 'lucide-react';
+import { LogIn, ShieldCheck, AlertCircle, Loader2, UserPlus } from 'lucide-react';
 import { auth } from '../services/firebase.ts';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { Button, Input, Card } from '../components/UI.tsx';
+import { Button, Card } from '../components/UI.tsx';
 
-export const Login: React.FC = () => {
+interface LoginProps {
+  onSwitchToSignUp?: () => void;
+}
+
+export const Login: React.FC<LoginProps> = ({ onSwitchToSignUp }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -18,7 +21,7 @@ export const Login: React.FC = () => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
     } catch (err: any) {
-      setError("Authentication failed. Please check your credentials.");
+      setError("Login failed. Please check your email and password.");
       console.error(err);
     } finally {
       setLoading(false);
@@ -38,17 +41,17 @@ export const Login: React.FC = () => {
              <ShieldCheck className="text-brand-dark" size={40} />
            </div>
            <h1 className="text-4xl font-black text-white tracking-tighter uppercase italic">Golden<span className="text-brand-gold">Wings</span></h1>
-           <p className="text-gray-500 font-bold uppercase tracking-[0.3em] text-[10px] mt-2">Enterprise Resource Management</p>
+           <p className="text-gray-500 font-bold uppercase tracking-[0.3em] text-[10px] mt-2">Sales & Inventory Management</p>
         </div>
 
         <Card className="p-12 border-none shadow-2xl bg-white/5 backdrop-blur-xl border border-white/5">
           <form onSubmit={handleLogin} className="space-y-8">
             <div className="space-y-6">
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-brand-gold uppercase tracking-[0.2em] ml-1">Secure Identity</label>
+                <label className="text-[10px] font-black text-brand-gold uppercase tracking-[0.2em] ml-1">Email</label>
                 <input 
                   type="email" 
-                  placeholder="name@goldenwings.com"
+                  placeholder="your@email.com"
                   className="w-full px-8 py-5 bg-white/5 border-2 border-white/10 rounded-3xl text-white outline-none focus:border-brand-gold transition-all font-bold placeholder:text-gray-600"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -56,7 +59,7 @@ export const Login: React.FC = () => {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-brand-gold uppercase tracking-[0.2em] ml-1">Access Token</label>
+                <label className="text-[10px] font-black text-brand-gold uppercase tracking-[0.2em] ml-1">Password</label>
                 <input 
                   type="password" 
                   placeholder="••••••••"
@@ -75,20 +78,33 @@ export const Login: React.FC = () => {
               </div>
             )}
 
-            <Button 
-              type="submit" 
-              className="w-full py-6 rounded-[32px] text-lg shadow-2xl"
-              disabled={loading}
-              icon={loading ? <Loader2 size={24} className="animate-spin" /> : <LogIn size={24} />}
-            >
-              INITIALIZE SESSION
-            </Button>
+            <div className="space-y-4">
+              <Button 
+                type="submit" 
+                className="w-full py-6 rounded-[32px] text-lg shadow-2xl"
+                disabled={loading}
+                icon={loading ? <Loader2 size={24} className="animate-spin" /> : <LogIn size={24} />}
+              >
+                LOGIN
+              </Button>
+
+              {onSwitchToSignUp && (
+                <button 
+                  type="button"
+                  onClick={onSwitchToSignUp}
+                  className="w-full py-2 flex items-center justify-center space-x-2 text-gray-500 hover:text-brand-gold transition-colors text-[10px] font-black uppercase tracking-widest"
+                >
+                  <UserPlus size={14} />
+                  <span>Don't have an account? Sign Up</span>
+                </button>
+              )}
+            </div>
           </form>
         </Card>
 
         <div className="text-center mt-12">
           <p className="text-gray-600 text-[9px] font-black uppercase tracking-[0.4em]">
-            Authorized Personnel Only • IP Logged
+            Registered Users Only
           </p>
         </div>
       </div>

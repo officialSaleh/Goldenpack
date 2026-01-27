@@ -1,4 +1,3 @@
-
 import { 
   Product, 
   Customer, 
@@ -8,17 +7,17 @@ import {
   AppSettings,
   DashboardStats 
 } from '../types';
-import { db_firestore, auth } from './firebase.ts';
+import { db_firestore } from './firebase.ts';
 import { 
   collection, 
   doc, 
   setDoc, 
-  getDoc, 
   onSnapshot, 
   addDoc, 
   updateDoc,
   query,
-  orderBy
+  orderBy,
+  Unsubscribe
 } from 'firebase/firestore';
 
 const STORAGE_KEY = 'perfumepack_pro_v2';
@@ -29,53 +28,87 @@ class DB {
   orders: Order[] = [];
   expenses: Expense[] = [];
   settings: AppSettings | null = null;
-  currentUser: User | null = null;
+  private unsubscribers: Unsubscribe[] = [];
 
   constructor() {
     this.loadLocal();
-    this.initFirestoreSync();
   }
 
-  // Load from LocalStorage for instant UI feedback (Optimistic)
   loadLocal() {
     const data = localStorage.getItem(STORAGE_KEY);
     if (data) {
-      const parsed = JSON.parse(data);
-      this.products = parsed.products || [];
-      this.customers = parsed.customers || [];
-      this.orders = parsed.orders || [];
-      this.expenses = parsed.expenses || [];
-      this.settings = parsed.settings || null;
+      try {
+        const parsed = JSON.parse(data);
+        this.products = parsed.products || [];
+        this.customers = parsed.customers || [];
+        this.orders = parsed.orders || [];
+        this.expenses = parsed.expenses || [];
+        this.settings = parsed.settings || null;
+      } catch (e) {
+        console.error("Failed to parse local storage", e);
+      }
     }
   }
 
-  // Initialize Real-time Cloud Sync
-  initFirestoreSync() {
-    // Listen for Settings
-    onSnapshot(doc(db_firestore, "app", "settings"), (doc) => {
-      if (doc.exists()) {
-        this.settings = doc.data() as AppSettings;
-        this.saveLocal();
+  // Called only after authentication is confirmed
+  startSync() {
+    this.stopSync(); // Clean up existing listeners if any
+
+    const handleError = (error: any) => {
+      if (error.code === 'permission-denied') {
+        console.warn("Firestore access restricted: Ensure user has correct role/permissions.");
+      } else {
+        console.error("Firestore sync error:", error);
       }
-    });
+    };
 
-    // Listen for Products
-    onSnapshot(collection(db_firestore, "products"), (snapshot) => {
-      this.products = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Product));
-      this.saveLocal();
-    });
+    // Settings Listener
+    this.unsubscribers.push(
+      onSnapshot(doc(db_firestore, "app", "settings"), (doc) => {
+        if (doc.exists()) {
+          this.settings = doc.data() as AppSettings;
+          this.saveLocal();
+        }
+      }, handleError)
+    );
 
-    // Listen for Customers
-    onSnapshot(collection(db_firestore, "customers"), (snapshot) => {
-      this.customers = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Customer));
-      this.saveLocal();
-    });
+    // Products Listener
+    this.unsubscribers.push(
+      onSnapshot(collection(db_firestore, "products"), (snapshot) => {
+        this.products = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Product));
+        this.saveLocal();
+      }, handleError)
+    );
 
-    // Listen for Orders
-    onSnapshot(query(collection(db_firestore, "orders"), orderBy("date", "desc")), (snapshot) => {
-      this.orders = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Order));
-      this.saveLocal();
-    });
+    // Customers Listener
+    this.unsubscribers.push(
+      onSnapshot(collection(db_firestore, "customers"), (snapshot) => {
+        this.customers = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Customer));
+        this.saveLocal();
+      }, handleError)
+    );
+
+    // Orders Listener
+    const ordersQuery = query(collection(db_firestore, "orders"), orderBy("date", "desc"));
+    this.unsubscribers.push(
+      onSnapshot(ordersQuery, (snapshot) => {
+        this.orders = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Order));
+        this.saveLocal();
+      }, handleError)
+    );
+
+    // Expenses Listener
+    this.unsubscribers.push(
+      onSnapshot(collection(db_firestore, "expenses"), (snapshot) => {
+        this.expenses = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Expense));
+        this.saveLocal();
+      }, handleError)
+    );
+  }
+
+  stopSync() {
+    this.unsubscribers.forEach(unsub => unsub());
+    this.unsubscribers = [];
   }
 
   saveLocal() {
@@ -107,20 +140,16 @@ class DB {
   }
 
   async addProduct(p: Product) { 
-    const docRef = await addDoc(collection(db_firestore, "products"), p);
-    console.log("Product added with ID: ", docRef.id);
+    await addDoc(collection(db_firestore, "products"), p);
   }
 
   async addCustomer(c: Customer) { 
-    const docRef = await addDoc(collection(db_firestore, "customers"), c);
-    console.log("Customer added with ID: ", docRef.id);
+    await addDoc(collection(db_firestore, "customers"), c);
   }
   
   async createOrder(order: Order) {
-    // 1. Create the Order document
     await setDoc(doc(db_firestore, "orders", order.id), order);
 
-    // 2. Update stock levels in Firestore
     for (const item of order.items) {
       const prod = this.products.find(p => p.id === item.productId);
       if (prod) {
@@ -131,7 +160,6 @@ class DB {
       }
     }
 
-    // 3. Update Customer Balance if Credit
     if (order.paymentType === 'Credit') {
       const cust = this.customers.find(c => c.id === order.customerId);
       if (cust) {
