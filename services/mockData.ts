@@ -1,3 +1,4 @@
+
 import { 
   Product, 
   Customer, 
@@ -29,6 +30,7 @@ class DB {
   expenses: Expense[] = [];
   settings: AppSettings | null = null;
   private unsubscribers: Unsubscribe[] = [];
+  private onSettingsChange: ((settings: AppSettings | null) => void) | null = null;
 
   constructor() {
     this.loadLocal();
@@ -50,24 +52,29 @@ class DB {
     }
   }
 
-  // Called only after authentication is confirmed
+  setSettingsListener(callback: (settings: AppSettings | null) => void) {
+    this.onSettingsChange = callback;
+    // Immediate call with current value
+    callback(this.settings);
+  }
+
   startSync() {
-    this.stopSync(); // Clean up existing listeners if any
+    this.stopSync();
 
     const handleError = (error: any) => {
-      if (error.code === 'permission-denied') {
-        console.warn("Firestore access restricted: Ensure user has correct role/permissions.");
-      } else {
-        console.error("Firestore sync error:", error);
-      }
+      console.error("Firestore sync error:", error.code, error.message);
     };
 
-    // Settings Listener
+    // Settings Listener - Critical for the Setup -> Dashboard transition
     this.unsubscribers.push(
       onSnapshot(doc(db_firestore, "app", "settings"), (doc) => {
         if (doc.exists()) {
           this.settings = doc.data() as AppSettings;
+          if (this.onSettingsChange) this.onSettingsChange(this.settings);
           this.saveLocal();
+        } else {
+          // If doc doesn't exist, we are in setup mode
+          if (this.onSettingsChange) this.onSettingsChange(null);
         }
       }, handleError)
     );
@@ -89,9 +96,8 @@ class DB {
     );
 
     // Orders Listener
-    const ordersQuery = query(collection(db_firestore, "orders"), orderBy("date", "desc"));
     this.unsubscribers.push(
-      onSnapshot(ordersQuery, (snapshot) => {
+      onSnapshot(query(collection(db_firestore, "orders"), orderBy("date", "desc")), (snapshot) => {
         this.orders = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Order));
         this.saveLocal();
       }, handleError)
@@ -127,6 +133,7 @@ class DB {
     this.settings = newSettings;
     await setDoc(doc(db_firestore, "app", "settings"), newSettings);
     this.saveLocal();
+    if (this.onSettingsChange) this.onSettingsChange(this.settings);
   }
 
   getProducts() { return this.products; }
@@ -140,16 +147,20 @@ class DB {
   }
 
   async addProduct(p: Product) { 
+    // Products are automatically stored in the database here
     await addDoc(collection(db_firestore, "products"), p);
   }
 
   async addCustomer(c: Customer) { 
+    // Customers are automatically stored in the database here
     await addDoc(collection(db_firestore, "customers"), c);
   }
   
   async createOrder(order: Order) {
+    // Orders are automatically stored in the database here
     await setDoc(doc(db_firestore, "orders", order.id), order);
 
+    // Update stock in Firestore
     for (const item of order.items) {
       const prod = this.products.find(p => p.id === item.productId);
       if (prod) {
@@ -160,6 +171,7 @@ class DB {
       }
     }
 
+    // Update customer balance in Firestore
     if (order.paymentType === 'Credit') {
       const cust = this.customers.find(c => c.id === order.customerId);
       if (cust) {
@@ -172,6 +184,7 @@ class DB {
   }
 
   async addExpense(e: Expense) {
+    // Expenses are automatically stored in the database here
     await addDoc(collection(db_firestore, "expenses"), e);
   }
 
