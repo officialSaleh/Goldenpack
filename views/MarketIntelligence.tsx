@@ -1,13 +1,19 @@
+
 import React, { useState } from 'react';
 import { Search, Sparkles, Globe, Link as LinkIcon, AlertCircle, Loader2 } from 'lucide-react';
-import { GoogleGenAI } from '@google/genai';
-import { Card, Button, Input, Badge } from '../components/UI';
+import { GoogleGenAI, GenerateContentResponse } from '@google/genai';
+import { Card, Button, Badge } from '../components/UI';
+
+interface Source {
+  title: string;
+  uri: string;
+}
 
 export const MarketIntelligence: React.FC = () => {
   const [query, setQuery] = useState('Current trends in luxury perfume glass bottle designs 2025');
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<string | null>(null);
-  const [sources, setSources] = useState<{title: string, uri: string}[]>([]);
+  const [sources, setSources] = useState<Source[]>([]);
 
   const handleResearch = async () => {
     if (!query.trim()) return;
@@ -17,7 +23,7 @@ export const MarketIntelligence: React.FC = () => {
 
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
-      const result = await ai.models.generateContent({
+      const result: GenerateContentResponse = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: query,
         config: {
@@ -27,19 +33,21 @@ export const MarketIntelligence: React.FC = () => {
 
       setResponse(result.text || 'No data found.');
       
-      const chunks = result.candidates?.[0]?.groundingMetadata?.groundingChunks;
-      if (chunks) {
-        const extractedSources = chunks
-          .filter(chunk => chunk.web && chunk.web.title && chunk.web.uri)
-          .map(chunk => ({ 
-            title: chunk.web?.title || 'Source', 
-            uri: chunk.web?.uri || '#' 
+      const groundingMetadata = result.candidates?.[0]?.groundingMetadata;
+      const chunks = groundingMetadata?.groundingChunks;
+      
+      if (chunks && Array.isArray(chunks)) {
+        const extractedSources: Source[] = chunks
+          .filter((chunk: any) => chunk.web && chunk.web.title && chunk.web.uri)
+          .map((chunk: any) => ({ 
+            title: chunk.web.title as string, 
+            uri: chunk.web.uri as string 
           }));
         setSources(extractedSources);
       }
     } catch (err) {
       console.error(err);
-      setResponse("Failed to fetch market data. Please ensure you have an internet connection.");
+      setResponse("Failed to fetch market data. Please ensure your API key is configured in the environment.");
     } finally {
       setLoading(false);
     }
