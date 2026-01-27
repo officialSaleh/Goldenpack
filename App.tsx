@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Layout } from './components/Layout';
 import { Dashboard } from './views/Dashboard';
@@ -7,7 +8,6 @@ import { POS } from './views/POS';
 import { Reports } from './views/Reports';
 import { OrderHistory } from './views/OrderHistory';
 import { Expenses } from './views/Expenses';
-import { MarketIntelligence } from './views/MarketIntelligence';
 import { Setup } from './views/Setup';
 import { Login } from './views/Login';
 import { SignUp } from './views/SignUp';
@@ -79,7 +79,6 @@ const App: React.FC = () => {
       case 'customers': return <Customers />;
       case 'pos':       return <POS setActiveTab={setActiveTab} />;
       case 'orders':    return <OrderHistory />;
-      case 'ai':        return <MarketIntelligence />;
       case 'expenses':  return <Expenses />;
       case 'reports':   return <Reports />;
       default:          return <Dashboard />;

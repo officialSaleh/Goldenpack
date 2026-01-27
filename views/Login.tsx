@@ -1,7 +1,8 @@
+
 import React, { useState } from 'react';
 import { LogIn, ShieldCheck, AlertCircle, Loader2, UserPlus } from 'lucide-react';
 import { auth } from '../services/firebase';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { Button, Card } from '../components/UI';
 
 interface LoginProps {
@@ -12,6 +13,7 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToSignUp }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -25,6 +27,22 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToSignUp }) => {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setGoogleLoading(true);
+    setError('');
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (err: any) {
+      if (err.code !== 'auth/popup-closed-by-user') {
+        setError("Google sign-in failed. Please try again.");
+      }
+      console.error(err);
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -82,11 +100,37 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToSignUp }) => {
               <Button 
                 type="submit" 
                 className="w-full py-6 rounded-[32px] text-lg shadow-2xl"
-                disabled={loading}
+                disabled={loading || googleLoading}
                 icon={loading ? <Loader2 size={24} className="animate-spin" /> : <LogIn size={24} />}
               >
                 LOGIN
               </Button>
+
+              <div className="relative flex items-center justify-center py-2">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-white/10"></div>
+                </div>
+                <span className="relative px-4 text-[10px] font-black uppercase tracking-widest text-gray-500 bg-brand-dark/0 backdrop-blur-sm">Or</span>
+              </div>
+
+              <button 
+                type="button"
+                onClick={handleGoogleLogin}
+                disabled={loading || googleLoading}
+                className="w-full flex items-center justify-center space-x-4 py-5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-[32px] text-white transition-all group disabled:opacity-50"
+              >
+                {googleLoading ? (
+                  <Loader2 size={20} className="animate-spin text-brand-gold" />
+                ) : (
+                  <svg className="w-5 h-5" viewBox="0 0 24 24">
+                    <path fill="#EA4335" d="M12 5.04c1.94 0 3.51.68 4.71 1.7l3.52-3.52C17.93 1.19 15.17 0 12 0 7.31 0 3.25 2.69 1.25 6.63l4.13 3.2C6.35 7.15 8.98 5.04 12 5.04z" />
+                    <path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27h-11.3v4.3h6.43c-.28 1.48-1.11 2.74-2.37 3.58l3.7 2.87c2.16-1.99 3.43-4.93 3.43-8.48z" />
+                    <path fill="#FBBC05" d="M5.38 14.83c-.23-.68-.36-1.41-.36-2.17 0-.76.13-1.48.36-2.17L1.25 7.29C.45 8.87 0 10.63 0 12.5s.45 3.63 1.25 5.21l4.13-3.2c-1.12-1.47-1.75-3.32-1.75-5.21z" />
+                    <path fill="#34A853" d="M12 24c3.24 0 5.95-1.07 7.94-2.91l-3.7-2.87c-1.03.69-2.34 1.1-3.7 1.1-3.02 0-5.65-2.11-6.56-4.96l-4.13 3.2C3.25 21.31 7.31 24 12 24z" />
+                  </svg>
+                )}
+                <span className="text-sm font-bold tracking-wide">Continue with Google</span>
+              </button>
 
               {onSwitchToSignUp && (
                 <button 
