@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { 
   Search, 
@@ -21,10 +20,10 @@ import {
   History,
   Printer
 } from 'lucide-react';
-import { db } from '../services/mockData.ts';
-import { Product, OrderItem, Customer, Order, OrderStatus } from '../types.ts';
-import { VAT_RATE } from '../constants.tsx';
-import { Modal, Button, Badge } from '../components/UI.tsx';
+import { db } from '../services/mockData';
+import { Product, OrderItem, Customer, Order, OrderStatus } from '../types';
+import { VAT_RATE } from '../constants';
+import { Modal, Button, Badge } from '../components/UI';
 
 interface POSProps {
   setActiveTab?: (tab: string) => void;

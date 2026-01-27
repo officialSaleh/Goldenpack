@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { LogIn, ShieldCheck, AlertCircle, Loader2, UserPlus } from 'lucide-react';
-import { auth } from '../services/firebase.ts';
+import { auth } from '../services/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { Button, Card } from '../components/UI.tsx';
+import { Button, Card } from '../components/UI';
 
 interface LoginProps {
   onSwitchToSignUp?: () => void;

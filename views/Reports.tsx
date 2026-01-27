@@ -1,12 +1,11 @@
-
 import React from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   Cell, PieChart, Pie, Legend 
 } from 'recharts';
 import { Download, FileText, TrendingUp, DollarSign, PieChart as PieIcon, ArrowUpRight, Award } from 'lucide-react';
-import { db } from '../services/mockData.ts';
-import { Card, Badge } from '../components/UI.tsx';
+import { db } from '../services/mockData';
+import { Card, Badge } from '../components/UI';
 
 export const Reports: React.FC = () => {
   const orders = db.getOrders();
@@ -107,7 +106,7 @@ export const Reports: React.FC = () => {
                   <div className="text-right">
                     <p className="font-black text-slate-900">{db.formatMoney(p.revenue)}</p>
                     <div className="w-24 bg-slate-100 h-1 rounded-full mt-2 overflow-hidden">
-                      <div className="bg-indigo-500 h-full" style={{ width: `${(p.revenue / (topProducts[0]?.revenue || 1)) * 100}%` }}></div>
+                      <div className="bg-indigo-50 h-full" style={{ width: `${(p.revenue / (topProducts[0]?.revenue || 1)) * 100}%` }}></div>
                     </div>
                   </div>
                 </div>
@@ -143,7 +142,7 @@ export const Reports: React.FC = () => {
             <h4 className="text-xs font-black uppercase tracking-widest text-slate-500 mb-2">Target Achievement</h4>
             <div className="text-3xl font-black mb-4">84%</div>
             <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-              <div className="bg-indigo-500 h-full w-[84%]"></div>
+              <div className="bg-indigo-50 h-full w-[84%]"></div>
             </div>
             <p className="text-[10px] text-slate-400 mt-4 font-medium leading-relaxed">
               Revenue target for Q2 is grounded in your base currency. Currently tracking ahead of last quarter's performance.

@@ -1,8 +1,7 @@
-
 import React, { useState } from 'react';
 import { Users, Search, Plus, Phone, Briefcase, ChevronRight, History, CreditCard } from 'lucide-react';
-import { db } from '../services/mockData.ts';
-import { Card, Button, Input, Modal, Badge } from '../components/UI.tsx';
+import { db } from '../services/mockData';
+import { Card, Button, Input, Modal, Badge } from '../components/UI';
 
 export const Customers: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');

@@ -1,8 +1,7 @@
-
 import React, { useState } from 'react';
 import { Search, Sparkles, Globe, Link as LinkIcon, AlertCircle, Loader2 } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
-import { Card, Button, Input, Badge } from '../components/UI.tsx';
+import { Card, Button, Input, Badge } from '../components/UI';
 
 export const MarketIntelligence: React.FC = () => {
   const [query, setQuery] = useState('Current trends in luxury perfume glass bottle designs 2025');
@@ -17,7 +16,7 @@ export const MarketIntelligence: React.FC = () => {
     setSources([]);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
       const result = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: query,
@@ -31,8 +30,11 @@ export const MarketIntelligence: React.FC = () => {
       const chunks = result.candidates?.[0]?.groundingMetadata?.groundingChunks;
       if (chunks) {
         const extractedSources = chunks
-          .filter(chunk => chunk.web)
-          .map(chunk => ({ title: chunk.web.title, uri: chunk.web.uri }));
+          .filter(chunk => chunk.web && chunk.web.title && chunk.web.uri)
+          .map(chunk => ({ 
+            title: chunk.web?.title || 'Source', 
+            uri: chunk.web?.uri || '#' 
+          }));
         setSources(extractedSources);
       }
     } catch (err) {

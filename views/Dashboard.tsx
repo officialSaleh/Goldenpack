@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { 
   TrendingUp, 
@@ -12,7 +11,7 @@ import {
   ShoppingCart
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { db } from '../services/mockData.ts';
+import { db } from '../services/mockData';
 
 const data = [
   { name: 'Mon', revenue: 4000, profit: 2400 },

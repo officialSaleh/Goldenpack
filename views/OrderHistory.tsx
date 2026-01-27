@@ -1,8 +1,7 @@
-
 import React from 'react';
-import { db } from '../services/mockData.ts';
+import { db } from '../services/mockData';
 import { Clock, Search } from 'lucide-react';
-import { Card, Badge, Input } from '../components/UI.tsx';
+import { Card, Badge, Input } from '../components/UI';
 
 export const OrderHistory: React.FC = () => {
   const orders = db.getOrders();

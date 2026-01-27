@@ -1,8 +1,7 @@
-
 import React, { useState } from 'react';
 import { Globe, CheckCircle2, ArrowRight, Coins } from 'lucide-react';
-import { db } from '../services/mockData.ts';
-import { Button } from '../components/UI.tsx';
+import { db } from '../services/mockData';
+import { Button } from '../components/UI';
 
 interface CurrencyOption {
   code: string;

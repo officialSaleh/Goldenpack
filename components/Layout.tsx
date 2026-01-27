@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { LogOut, Menu, X, User as UserIcon, ShieldCheck } from 'lucide-react';
-import { NAV_ITEMS } from '../constants.tsx';
-import { CURRENT_USER } from '../services/mockData.ts';
-import { auth } from '../services/firebase.ts';
+import { NAV_ITEMS } from '../constants';
+import { CURRENT_USER } from '../services/mockData';
+import { auth } from '../services/firebase';
 import { signOut } from 'firebase/auth';
 
 interface LayoutProps {

@@ -1,10 +1,9 @@
-
 import React, { useState } from 'react';
-import { db } from '../services/mockData.ts';
+import { db } from '../services/mockData';
 import { Wallet, Plus, DollarSign, Calendar } from 'lucide-react';
-import { Card, Button, Modal, Input } from '../components/UI.tsx';
-import { EXPENSE_CATEGORIES } from '../constants.tsx';
-import { ExpenseCategory } from '../types.ts';
+import { Card, Button, Modal, Input } from '../components/UI';
+import { EXPENSE_CATEGORIES } from '../constants';
+import { ExpenseCategory } from '../types';
 
 export const Expenses: React.FC = () => {
   const [expenses, setExpenses] = useState(db.getExpenses());

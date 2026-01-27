@@ -7,7 +7,7 @@ import {
   AppSettings,
   DashboardStats 
 } from '../types';
-import { db_firestore } from './firebase.ts';
+import { db_firestore } from './firebase';
 import { 
   collection, 
   doc, 

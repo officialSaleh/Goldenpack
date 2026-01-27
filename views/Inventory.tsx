@@ -1,10 +1,9 @@
-
 import React, { useState } from 'react';
 import { Package, Search, Plus, Edit2, Trash2, Filter, AlertTriangle, Box, DollarSign } from 'lucide-react';
-import { db } from '../services/mockData.ts';
-import { CATEGORIES } from '../constants.tsx';
-import { Card, Button, Input, Modal, Badge } from '../components/UI.tsx';
-import { Category } from '../types.ts';
+import { db } from '../services/mockData';
+import { CATEGORIES } from '../constants';
+import { Card, Button, Input, Modal, Badge } from '../components/UI';
+import { Category } from '../types';
 
 export const Inventory: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
