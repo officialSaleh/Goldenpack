@@ -162,7 +162,7 @@ export const POS: React.FC<POSProps> = ({ setActiveTab }) => {
             <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
             <input 
               type="text" 
-              placeholder="Search catalogue..." 
+              placeholder="Search catalogue by name..." 
               className="w-full pl-16 pr-6 py-5 bg-white border border-slate-200 rounded-3xl focus:ring-4 focus:ring-brand-gold/10 focus:border-brand-gold outline-none transition-all font-bold text-slate-900"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -170,26 +170,42 @@ export const POS: React.FC<POSProps> = ({ setActiveTab }) => {
           </div>
         </div>
         
-        <div className="flex-1 overflow-y-auto p-6 md:p-8 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6 scrollbar-hide">
+        <div className="flex-1 overflow-y-auto p-6 md:p-8 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6 scrollbar-hide">
           {filteredProducts.map(p => (
             <button 
               key={p.id}
               onClick={() => addToCart(p)}
-              className="flex flex-col text-left bg-white border border-slate-100 p-2.5 rounded-[32px] hover:border-brand-gold hover:shadow-2xl hover:shadow-brand-gold/5 transition-all active:scale-95 group"
+              className="flex flex-col text-left bg-white border border-slate-100 p-6 rounded-[32px] hover:border-brand-gold hover:shadow-2xl hover:shadow-brand-gold/5 transition-all active:scale-95 group relative overflow-hidden"
             >
-              <div className="relative aspect-square rounded-[24px] overflow-hidden bg-slate-50 mb-4">
-                <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                <div className={`absolute bottom-3 right-3 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-xl ${
-                  p.stockQuantity < 50 ? 'bg-rose-500 text-white' : 'bg-brand-dark/90 text-white'
+              <div className="flex justify-between items-start mb-4">
+                <div className={`p-3 rounded-2xl ${
+                  p.category === 'Bottle' ? 'bg-indigo-50 text-indigo-600' : p.category === 'Spray' ? 'bg-amber-50 text-amber-600' : 'bg-rose-50 text-rose-600'
                 }`}>
-                  {p.stockQuantity} UNIT
+                  <Package size={20} />
+                </div>
+                <div className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest ${
+                  p.stockQuantity < 50 ? 'bg-rose-500 text-white' : 'bg-slate-100 text-slate-500'
+                }`}>
+                  {p.stockQuantity} IN STOCK
                 </div>
               </div>
-              <div className="px-2 pb-2">
-                <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest truncate">{p.category}</h4>
-                <h4 className="text-sm font-bold text-slate-900 truncate mt-0.5">{p.name}</h4>
-                <p className="text-lg font-black text-brand-gold mt-2">{db.formatMoney(p.sellingPrice)}</p>
+              
+              <div className="mb-6">
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{p.category} • {p.size}ML</h4>
+                <h4 className="text-base font-bold text-slate-900 line-clamp-2 leading-tight h-10">{p.name}</h4>
               </div>
+
+              <div className="flex items-center justify-between mt-auto pt-4 border-t border-slate-50">
+                <p className="text-xl font-black text-brand-gold">{db.formatMoney(p.sellingPrice)}</p>
+                <div className="w-8 h-8 rounded-full bg-brand-gold/10 flex items-center justify-center text-brand-gold group-hover:bg-brand-gold group-hover:text-white transition-all">
+                  <Plus size={16} />
+                </div>
+              </div>
+
+              {/* Decorative side accent */}
+              <div className={`absolute top-0 left-0 w-1.5 h-full ${
+                p.category === 'Bottle' ? 'bg-indigo-500' : p.category === 'Spray' ? 'bg-amber-500' : 'bg-rose-500'
+              } opacity-20`} />
             </button>
           ))}
           {filteredProducts.length === 0 && (

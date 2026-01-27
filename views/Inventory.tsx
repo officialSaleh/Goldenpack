@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Package, Search, Plus, Edit2, Trash2, Filter, AlertTriangle, Box, DollarSign } from 'lucide-react';
 import { db } from '../services/mockData';
@@ -35,8 +36,7 @@ export const Inventory: React.FC = () => {
       size: parseInt(formData.size) || 0,
       costPrice: parseFloat(formData.costPrice),
       sellingPrice: parseFloat(formData.sellingPrice),
-      stockQuantity: parseInt(formData.stockQuantity),
-      imageUrl: `https://picsum.photos/seed/${formData.name}/200`
+      stockQuantity: parseInt(formData.stockQuantity)
     };
     db.addProduct(newProduct);
     setProducts([...db.getProducts()]);
@@ -84,7 +84,7 @@ export const Inventory: React.FC = () => {
           <table className="w-full text-left">
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                <th className="px-8 py-5">Product</th>
+                <th className="px-8 py-5">Product Name</th>
                 <th className="px-8 py-5">Category</th>
                 <th className="px-8 py-5">Size</th>
                 <th className="px-8 py-5 text-right">Cost ({currencySymbol})</th>
@@ -97,11 +97,11 @@ export const Inventory: React.FC = () => {
               {filteredProducts.map((p) => (
                 <tr key={p.id} className="hover:bg-slate-50 transition-colors group">
                   <td className="px-8 py-5">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 rounded-xl bg-slate-100 flex-shrink-0 overflow-hidden shadow-sm">
-                        <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 group-hover:text-brand-gold transition-colors">
+                        <Package size={16} />
                       </div>
-                      <span className="font-bold text-slate-900 truncate max-w-[200px]">{p.name}</span>
+                      <span className="font-bold text-slate-900 truncate max-w-[250px]">{p.name}</span>
                     </div>
                   </td>
                   <td className="px-8 py-5">
