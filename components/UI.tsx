@@ -29,7 +29,7 @@ export const Button: React.FC<ButtonProps> = ({
   const sizes = {
     sm: "px-4 py-2 text-[10px] space-x-2",
     md: "px-6 py-3.5 text-xs space-x-3",
-    lg: "px-10 py-5 text-sm space-x-4"
+    lg: "px-8 py-4 md:px-10 md:py-5 text-sm space-x-4"
   };
 
   return (
@@ -48,7 +48,7 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 }
 
 export const Input: React.FC<InputProps> = ({ label, error, icon, className = '', ...props }) => (
-  <div className="space-y-2">
+  <div className="space-y-2 w-full">
     {label && <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">{label}</label>}
     <div className="relative">
       {icon && <div className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400">{icon}</div>}
@@ -63,7 +63,7 @@ export const Input: React.FC<InputProps> = ({ label, error, icon, className = ''
 
 // Card Component
 export const Card: React.FC<{ children: React.ReactNode; className?: string; noPadding?: boolean }> = ({ children, className = '', noPadding = false }) => (
-  <div className={`bg-white rounded-[32px] shadow-sm border border-brand-linen/40 overflow-hidden ${noPadding ? '' : 'p-8 md:p-10'} ${className}`}>
+  <div className={`bg-white rounded-3xl md:rounded-[32px] shadow-sm border border-brand-linen/40 overflow-hidden ${noPadding ? '' : 'p-6 md:p-10'} ${className}`}>
     {children}
   </div>
 );
@@ -79,7 +79,7 @@ export const Badge: React.FC<{ children: React.ReactNode; color?: 'indigo' | 'em
     slate: "bg-gray-100 text-gray-600 border border-gray-200"
   };
   return (
-    <span className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest ${colors[color]}`}>
+    <span className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest whitespace-nowrap ${colors[color]}`}>
       {children}
     </span>
   );
@@ -89,15 +89,17 @@ export const Badge: React.FC<{ children: React.ReactNode; color?: 'indigo' | 'em
 export const Modal: React.FC<{ isOpen: boolean; onClose: () => void; title: string; children: React.ReactNode }> = ({ isOpen, onClose, title, children }) => {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-[100] bg-brand-dark/40 backdrop-blur-md flex items-center justify-center p-6">
-      <div className="bg-white rounded-[40px] w-full max-w-xl shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden">
-        <div className="px-10 py-8 border-b border-brand-linen flex items-center justify-between bg-brand-bg/50">
-          <h3 className="text-xl font-black text-brand-dark uppercase tracking-tight italic">Golden<span className="text-brand-gold">Wings</span> <span className="text-gray-400 font-medium ml-2">| {title}</span></h3>
-          <button onClick={onClose} className="p-3 hover:bg-brand-linen rounded-2xl transition-colors text-gray-400">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+    <div className="fixed inset-0 z-[100] bg-brand-dark/60 backdrop-blur-md flex items-center justify-center p-4">
+      <div className="bg-white rounded-[32px] w-full max-w-xl shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden max-h-[90vh] flex flex-col">
+        <div className="px-6 py-5 md:px-10 md:py-8 border-b border-brand-linen flex items-center justify-between bg-brand-bg/50 shrink-0">
+          <h3 className="text-lg md:text-xl font-black text-brand-dark uppercase tracking-tight italic leading-none">
+            {title}
+          </h3>
+          <button onClick={onClose} className="p-2 hover:bg-brand-linen rounded-xl transition-colors text-gray-400">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           </button>
         </div>
-        <div className="p-10">
+        <div className="p-6 md:p-10 overflow-y-auto scrollbar-hide">
           {children}
         </div>
       </div>

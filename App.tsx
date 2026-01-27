@@ -22,32 +22,37 @@ const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isRegistering, setIsRegistering] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
-    // Listen for Auth State
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
-      
       if (firebaseUser) {
-        // Only start Firestore listeners AFTER authentication is confirmed
         db.startSync();
-        
-        // Brief delay to allow initial settings to arrive via snapshot
-        const settings = db.getSettings();
-        if (!settings || !settings.setupComplete) {
-          setSetupRequired(true);
-        } else {
-          setSetupRequired(false);
-        }
+        // Check settings periodically or based on events to resolve the "stuck" setup
+        const checkSettings = () => {
+          const settings = db.getSettings();
+          if (!settings || !settings.setupComplete) {
+            setSetupRequired(true);
+          } else {
+            setSetupRequired(false);
+          }
+        };
+        // Initial check
+        setTimeout(checkSettings, 1000);
       } else {
-        // Stop listeners on logout
         db.stopSync();
       }
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [refreshTrigger]);
+
+  const handleSetupComplete = () => {
+    setSetupRequired(false);
+    setRefreshTrigger(prev => prev + 1); // Force state re-evaluation
+  };
 
   if (loading) {
     return (
@@ -55,7 +60,7 @@ const App: React.FC = () => {
         <div className="w-16 h-16 bg-brand-gold rounded-2xl animate-pulse flex items-center justify-center mb-6">
           <Loader2 className="text-brand-dark animate-spin" size={32} />
         </div>
-        <p className="text-brand-gold font-black uppercase tracking-[0.4em] text-[10px]">Loading...</p>
+        <p className="text-brand-gold font-black uppercase tracking-[0.4em] text-[10px]">Authenticating...</p>
       </div>
     );
   }
@@ -69,7 +74,7 @@ const App: React.FC = () => {
   }
 
   if (setupRequired) {
-    return <Setup onComplete={() => setSetupRequired(false)} />;
+    return <Setup onComplete={handleSetupComplete} />;
   }
 
   const renderContent = () => {
