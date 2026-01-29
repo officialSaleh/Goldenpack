@@ -55,6 +55,22 @@ export const POS: React.FC = () => {
     }).filter(i => i.quantity > 0));
   };
 
+  const handleManualQtyChange = (id: string, value: string) => {
+    const numericValue = parseInt(value);
+    if (isNaN(numericValue) || numericValue <= 0) {
+      setCart(cart.filter(i => i.productId !== id));
+      return;
+    }
+
+    const p = products.find(prod => prod.id === id);
+    if (!p) return;
+
+    const validatedQty = Math.min(numericValue, p.stockQuantity);
+    setCart(cart.map(item => 
+      item.productId === id ? { ...item, quantity: validatedQty } : item
+    ));
+  };
+
   const totals = useMemo(() => {
     const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
     const vat = subtotal * VAT_RATE;
@@ -179,7 +195,13 @@ export const POS: React.FC = () => {
                   </div>
                   <div className="flex items-center space-x-3 bg-brand-dark/50 p-1.5 rounded-xl border border-white/5">
                     <button onClick={() => updateQty(item.productId, -1)} className="text-brand-gold hover:scale-110"><Minus size={14} /></button>
-                    <span className="text-xs font-black text-white w-4 text-center">{item.quantity}</span>
+                    <input 
+                      type="number"
+                      inputMode="numeric"
+                      className="bg-transparent text-xs font-black text-white w-12 text-center border-none focus:ring-0 focus:text-brand-gold transition-colors outline-none"
+                      value={item.quantity}
+                      onChange={(e) => handleManualQtyChange(item.productId, e.target.value)}
+                    />
                     <button onClick={() => updateQty(item.productId, 1)} className="text-brand-gold hover:scale-110"><Plus size={14} /></button>
                   </div>
                 </div>
