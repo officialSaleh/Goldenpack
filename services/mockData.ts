@@ -140,7 +140,6 @@ class DB {
   formatMoney(amount: number) {
     const symbol = this.settings?.currencySymbol || '$';
     const formatted = amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    // Use a non-breaking space and specific order to prevent RTL flipping issues
     return `${symbol} ${formatted}`;
   }
 
@@ -152,7 +151,6 @@ class DB {
   getContainers() { return this.containers; }
 
   async addProduct(p: Product) { 
-    // Fix: Using setDoc with p.id to ensure the Firestore document name matches the object id
     await setDoc(doc(db_firestore, "products", p.id), p);
   }
 
@@ -166,35 +164,57 @@ class DB {
 
   async createOrder(order: Order) {
     await runTransaction(db_firestore, async (transaction) => {
-      for (const item of order.items) {
-        const productRef = doc(db_firestore, "products", item.productId);
-        const prodDoc = await transaction.get(productRef);
+      // 1. ALL READS MUST HAPPEN FIRST
+      // Fetch all product documents involved in the order
+      const productRefs = order.items.map(item => doc(db_firestore, "products", item.productId));
+      const productSnaps = await Promise.all(productRefs.map(ref => transaction.get(ref)));
+      
+      // Fetch customer document if it's a credit order
+      let customerSnap = null;
+      let customerRef = null;
+      if (order.paymentType === 'Credit') {
+        customerRef = doc(db_firestore, "customers", order.customerId);
+        customerSnap = await transaction.get(customerRef);
+      }
+
+      // 2. VALIDATION LOGIC (No database changes here)
+      const stockUpdates = [];
+      for (let i = 0; i < order.items.length; i++) {
+        const item = order.items[i];
+        const snap = productSnaps[i];
         
-        if (!prodDoc.exists()) {
-          throw new Error(`Product "${item.productName}" not found in database. Please refresh.`);
+        if (!snap.exists()) {
+          throw new Error(`Product "${item.productName}" (ID: ${item.productId}) not found in database. Please refresh.`);
         }
         
-        const serverStock = prodDoc.data().stockQuantity;
+        const serverStock = snap.data()?.stockQuantity || 0;
         if (serverStock < item.quantity) {
           throw new Error(`Insufficient stock for ${item.productName}. Available: ${serverStock}`);
         }
         
-        transaction.update(productRef, { stockQuantity: serverStock - item.quantity });
+        stockUpdates.push({
+          ref: productRefs[i],
+          newStock: serverStock - item.quantity
+        });
       }
 
+      // 3. ALL WRITES MUST HAPPEN LAST
+      // Update stocks
+      for (const update of stockUpdates) {
+        transaction.update(update.ref, { stockQuantity: update.newStock });
+      }
+
+      // Update customer balance if applicable
+      if (customerRef && customerSnap?.exists()) {
+        const currentBalance = customerSnap.data()?.outstandingBalance || 0;
+        transaction.update(customerRef, { outstandingBalance: currentBalance + order.total });
+      }
+
+      // Create the order document
       transaction.set(doc(db_firestore, "orders", order.id), order);
-
-      if (order.paymentType === 'Credit') {
-        const customerRef = doc(db_firestore, "customers", order.customerId);
-        const custDoc = await transaction.get(customerRef);
-        if (custDoc.exists()) {
-          const balance = custDoc.data().outstandingBalance || 0;
-          transaction.update(customerRef, { outstandingBalance: balance + order.total });
-        }
-      }
     });
 
-    // Optimistic UI update
+    // Optimistic UI update (optional, but keeps UI responsive)
     this.products = this.products.map(p => {
       const sold = order.items.find(i => i.productId === p.id);
       return sold ? { ...p, stockQuantity: p.stockQuantity - sold.quantity } : p;
