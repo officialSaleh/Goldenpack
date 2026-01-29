@@ -21,7 +21,8 @@ import {
   query,
   orderBy,
   Unsubscribe,
-  runTransaction
+  runTransaction,
+  DocumentSnapshot
 } from 'firebase/firestore';
 
 const STORAGE_KEY = 'perfumepack_pro_v2';
@@ -164,62 +165,71 @@ class DB {
 
   async createOrder(order: Order) {
     await runTransaction(db_firestore, async (transaction) => {
-      // 1. ALL READS MUST HAPPEN FIRST
-      // Fetch all product documents involved in the order
-      const productRefs = order.items.map(item => doc(db_firestore, "products", item.productId));
-      const productSnaps = await Promise.all(productRefs.map(ref => transaction.get(ref)));
-      
-      // Fetch customer document if it's a credit order
+      // 1. DATA COLLECTION (Read Phase Only)
+      // Deduplicate product IDs to avoid redundant reads
+      const uniqueProductIds = Array.from(new Set(order.items.map(item => item.productId)));
+      const productSnapshots = new Map<string, DocumentSnapshot>();
+
+      // Perform all Product READS sequentially to strictly follow Firestore rules
+      for (const productId of uniqueProductIds) {
+        const productRef = doc(db_firestore, "products", productId);
+        const snap = await transaction.get(productRef);
+        if (!snap.exists()) {
+          throw new Error(`Product reference ${productId} not found in database.`);
+        }
+        productSnapshots.set(productId, snap);
+      }
+
+      // Perform Customer READ if applicable
       let customerSnap = null;
       let customerRef = null;
       if (order.paymentType === 'Credit') {
         customerRef = doc(db_firestore, "customers", order.customerId);
         customerSnap = await transaction.get(customerRef);
+        if (!customerSnap.exists()) {
+          throw new Error(`Customer reference ${order.customerId} not found.`);
+        }
       }
 
-      // 2. VALIDATION LOGIC (No database changes here)
+      // 2. LOGICAL VALIDATION (Memory Phase - No DB operations)
       const stockUpdates = [];
-      for (let i = 0; i < order.items.length; i++) {
-        const item = order.items[i];
-        const snap = productSnaps[i];
-        
-        if (!snap.exists()) {
-          throw new Error(`Product "${item.productName}" (ID: ${item.productId}) not found in database. Please refresh.`);
+      for (const item of order.items) {
+        const snap = productSnapshots.get(item.productId);
+        if (!snap) continue;
+
+        const serverData = snap.data();
+        const currentStock = serverData?.stockQuantity || 0;
+
+        if (currentStock < item.quantity) {
+          throw new Error(`Insufficient stock for ${item.productName}. Available: ${currentStock}`);
         }
-        
-        const serverStock = snap.data()?.stockQuantity || 0;
-        if (serverStock < item.quantity) {
-          throw new Error(`Insufficient stock for ${item.productName}. Available: ${serverStock}`);
-        }
-        
+
+        // Prepare the update
         stockUpdates.push({
-          ref: productRefs[i],
-          newStock: serverStock - item.quantity
+          ref: snap.ref,
+          newStock: currentStock - item.quantity
         });
       }
 
-      // 3. ALL WRITES MUST HAPPEN LAST
-      // Update stocks
+      // 3. EXECUTION PHASE (Write Phase Only - No Reads allowed after this point)
+      
+      // Update inventory levels
       for (const update of stockUpdates) {
         transaction.update(update.ref, { stockQuantity: update.newStock });
       }
 
-      // Update customer balance if applicable
-      if (customerRef && customerSnap?.exists()) {
+      // Update customer balance for credit sales
+      if (customerRef && customerSnap) {
         const currentBalance = customerSnap.data()?.outstandingBalance || 0;
         transaction.update(customerRef, { outstandingBalance: currentBalance + order.total });
       }
 
-      // Create the order document
-      transaction.set(doc(db_firestore, "orders", order.id), order);
+      // Commit the transaction record
+      const orderRef = doc(db_firestore, "orders", order.id);
+      transaction.set(orderRef, order);
     });
 
-    // Optimistic UI update (optional, but keeps UI responsive)
-    this.products = this.products.map(p => {
-      const sold = order.items.find(i => i.productId === p.id);
-      return sold ? { ...p, stockQuantity: p.stockQuantity - sold.quantity } : p;
-    });
-    this.orders = [order, ...this.orders];
+    // Notify local subscribers
     this.notify();
   }
 
