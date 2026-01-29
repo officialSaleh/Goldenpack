@@ -81,10 +81,22 @@ export interface Expense {
   notes?: string;
 }
 
+export interface Container {
+  id: string;
+  referenceNumber: string;
+  arrivalDate: string;
+  supplier: string;
+  itemCount: number;
+  status: 'In Transit' | 'Arrived' | 'Unloaded';
+  notes?: string;
+}
+
 export interface DashboardStats {
   todaySales: number;
   totalRevenue: number;
   outstandingCredit: number;
   overdueCustomersCount: number;
   lowStockAlerts: number;
+  totalInventoryValue: number;
+  netProfit: number;
 }

@@ -1,34 +1,14 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
-  Search, 
-  ShoppingCart, 
-  Trash2, 
-  Plus, 
-  Minus,
-  AlertCircle,
-  ShieldCheck,
-  ChevronRight,
-  Package,
-  CheckCircle2,
-  Receipt,
-  ArrowRight,
-  AlertTriangle,
-  History,
-  Printer,
-  Wallet,
-  CreditCard
+  Search, ShoppingCart, Plus, Minus, AlertCircle, Package, CheckCircle2, ArrowRight, Printer, X, ChevronUp
 } from 'lucide-react';
 import { db } from '../services/mockData';
 import { Product, OrderItem, Customer, Order } from '../types';
 import { VAT_RATE } from '../constants';
-import { Modal, Button, Badge } from '../components/UI';
+import { Modal, Button, Badge, Card } from '../components/UI';
 
-interface POSProps {
-  setActiveTab?: (tab: string) => void;
-}
-
-export const POS: React.FC<POSProps> = ({ setActiveTab }) => {
+export const POS: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [cart, setCart] = useState<OrderItem[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -37,352 +17,265 @@ export const POS: React.FC<POSProps> = ({ setActiveTab }) => {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [lastOrder, setLastOrder] = useState<Order | null>(null);
   const [isOverrideActive, setIsOverrideActive] = useState(false);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const [, setTick] = useState(0);
+  useEffect(() => db.subscribe(() => setTick(t => t + 1)), []);
 
   const products = db.getProducts();
   const customers = db.getCustomers();
 
-  const filteredProducts = products.filter(p => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) && p.stockQuantity > 0
+  const filteredProducts = useMemo(() => 
+    products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())),
+    [products, searchTerm]
   );
 
   const addToCart = (product: Product) => {
     const existing = cart.find(item => item.productId === product.id);
     if (existing) {
       if (existing.quantity >= product.stockQuantity) return;
-      setCart(cart.map(item => 
-        item.productId === product.id 
-          ? { ...item, quantity: item.quantity + 1 } 
-          : item
-      ));
+      setCart(cart.map(item => item.productId === product.id ? { ...item, quantity: item.quantity + 1 } : item));
     } else {
-      setCart([...cart, {
-        productId: product.id,
-        productName: product.name,
-        quantity: 1,
-        price: product.sellingPrice
-      }]);
+      if (product.stockQuantity <= 0) return;
+      setCart([...cart, { productId: product.id, productName: product.name, quantity: 1, price: product.sellingPrice }]);
     }
   };
 
   const updateQty = (id: string, delta: number) => {
     setCart(cart.map(item => {
       if (item.productId === id) {
-        const product = products.find(p => p.id === id);
+        const p = products.find(prod => prod.id === id);
         const newQty = Math.max(0, item.quantity + delta);
-        if (product && newQty > product.stockQuantity) return item;
+        if (p && newQty > p.stockQuantity) return item;
         return { ...item, quantity: newQty };
       }
       return item;
-    }).filter(item => item.quantity > 0));
+    }).filter(i => i.quantity > 0));
   };
 
   const totals = useMemo(() => {
     const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
     const vat = subtotal * VAT_RATE;
-    const total = subtotal + vat;
-    return { subtotal, vat, total };
+    return { subtotal, vat, total: subtotal + vat };
   }, [cart]);
-
-  const creditUsagePercent = useMemo(() => {
-    if (!selectedCustomer) return 0;
-    const projectTotal = paymentType === 'Credit' ? totals.total : 0;
-    return ((selectedCustomer.outstandingBalance + projectTotal) / selectedCustomer.creditLimit) * 100;
-  }, [selectedCustomer, paymentType, totals.total]);
 
   const handleCheckoutInitiate = () => {
     if (!selectedCustomer || cart.length === 0) return;
-
     if (paymentType === 'Credit') {
-      const isOverLimit = (selectedCustomer.outstandingBalance + totals.total) > selectedCustomer.creditLimit;
-      const overdueOrders = db.getOrders().filter(o => 
-        o.customerId === selectedCustomer.id && 
-        new Date(o.dueDate) < new Date() && 
-        o.status !== 'Paid'
-      );
-
-      if ((isOverLimit || overdueOrders.length > 0) && !isOverrideActive) {
-        setShowCreditWarning(true);
-        return;
-      }
+      const isOver = (selectedCustomer.outstandingBalance + totals.total) > selectedCustomer.creditLimit;
+      if (isOver && !isOverrideActive) { setShowCreditWarning(true); return; }
     }
-
     setShowConfirmModal(true);
   };
 
-  const finalizeCheckout = () => {
+  const finalizeCheckout = async () => {
     if (!selectedCustomer) return;
-
-    const dueDate = new Date();
-    if (paymentType === 'Credit') {
-      dueDate.setDate(dueDate.getDate() + selectedCustomer.defaultCreditDays);
+    setLoading(true);
+    try {
+      const order: Order = {
+        id: `ORD-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
+        customerId: selectedCustomer.id,
+        customerName: selectedCustomer.name,
+        date: new Date().toISOString().split('T')[0],
+        items: [...cart],
+        ...totals,
+        paymentType,
+        status: paymentType === 'Cash' ? 'Paid' : 'Pending',
+        dueDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+        amountPaid: paymentType === 'Cash' ? totals.total : 0,
+      };
+      await db.createOrder(order);
+      setLastOrder(order);
+      setCart([]);
+      setSelectedCustomer(null);
+      setIsCartOpen(false);
+    } catch (err: any) {
+      setErrorMsg(err.message);
+    } finally {
+      setLoading(false);
+      setShowConfirmModal(false);
     }
-
-    const newOrder: Order = {
-      id: `ORD-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
-      customerId: selectedCustomer.id,
-      customerName: selectedCustomer.name,
-      date: new Date().toISOString().split('T')[0],
-      items: [...cart],
-      subtotal: totals.subtotal,
-      vat: totals.vat,
-      total: totals.total,
-      paymentType,
-      status: paymentType === 'Cash' ? 'Paid' : 'Pending',
-      dueDate: dueDate.toISOString().split('T')[0],
-      amountPaid: paymentType === 'Cash' ? totals.total : 0,
-    };
-
-    db.createOrder(newOrder);
-    setLastOrder(newOrder);
-    setCart([]);
-    setSelectedCustomer(null);
-    setIsOverrideActive(false);
-    setShowConfirmModal(false);
-  };
-
-  const resetPOS = () => {
-    setLastOrder(null);
-    setPaymentType('Cash');
-    setCart([]);
-    setSelectedCustomer(null);
-    setIsOverrideActive(false);
-  };
-
-  const navigateToHistory = () => {
-    resetPOS();
-    if (setActiveTab) setActiveTab('orders');
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 lg:h-[calc(100vh-160px)]">
-      {/* Product Selection Area */}
-      <div className="flex-1 flex flex-col bg-white rounded-[40px] shadow-sm border border-slate-100 overflow-hidden order-2 lg:order-1">
-        <div className="p-6 md:p-8 border-b border-slate-50 bg-slate-50/30">
-          <div className="relative">
-            <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+    <div className="flex flex-col lg:flex-row gap-4 h-[calc(100vh-120px)] lg:h-full relative overflow-hidden">
+      {/* Product Area */}
+      <div className="flex-1 flex flex-col bg-white rounded-[24px] lg:rounded-[40px] shadow-sm border border-slate-100 overflow-hidden">
+        <div className="p-4 border-b border-slate-50 bg-slate-50/30 flex items-center space-x-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input 
               type="text" 
-              placeholder="Search catalogue by name..." 
-              className="w-full pl-16 pr-6 py-5 bg-white border border-slate-200 rounded-3xl focus:ring-4 focus:ring-brand-gold/10 focus:border-brand-gold outline-none transition-all font-bold text-slate-900"
+              placeholder="Search catalogue..." 
+              className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-brand-gold/10 focus:border-brand-gold outline-none transition-all font-bold text-slate-900 text-sm"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
+          <Badge color="gold" className="hidden sm:inline-flex">{filteredProducts.length} Items</Badge>
         </div>
         
-        <div className="flex-1 overflow-y-auto p-6 md:p-8 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6 scrollbar-hide">
+        <div className="flex-1 overflow-y-auto p-4 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 scrollbar-hide">
           {filteredProducts.map(p => (
             <button 
               key={p.id}
               onClick={() => addToCart(p)}
-              className="flex flex-col text-left bg-white border border-slate-100 p-6 rounded-[32px] hover:border-brand-gold hover:shadow-2xl hover:shadow-brand-gold/5 transition-all active:scale-95 group relative overflow-hidden"
+              disabled={p.stockQuantity <= 0}
+              className={`flex flex-col text-left bg-white border border-slate-100 p-3 lg:p-4 rounded-2xl lg:rounded-3xl transition-all active:scale-95 group relative overflow-hidden ${p.stockQuantity <= 0 ? 'opacity-40 grayscale' : 'hover:border-brand-gold hover:shadow-lg'}`}
             >
-              <div className="flex justify-between items-start mb-4">
-                <div className={`p-3 rounded-2xl ${
-                  p.category === 'Bottle' ? 'bg-indigo-50 text-indigo-600' : p.category === 'Spray' ? 'bg-amber-50 text-amber-600' : 'bg-rose-50 text-rose-600'
-                }`}>
-                  <Package size={20} />
+              <div className="flex justify-between items-start mb-2">
+                <div className={`p-1.5 rounded-lg ${p.category === 'Bottle' ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-600'}`}>
+                  <Package size={14} />
                 </div>
-                <div className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest ${
-                  p.stockQuantity < 50 ? 'bg-rose-500 text-white' : 'bg-slate-100 text-slate-500'
-                }`}>
-                  {p.stockQuantity} IN STOCK
-                </div>
-              </div>
-              
-              <div className="mb-6">
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{p.category} • {p.size}ML</h4>
-                <h4 className="text-base font-bold text-slate-900 line-clamp-2 leading-tight h-10">{p.name}</h4>
-              </div>
-
-              <div className="flex items-center justify-between mt-auto pt-4 border-t border-slate-50">
-                <p className="text-xl font-black text-brand-gold">{db.formatMoney(p.sellingPrice)}</p>
-                <div className="w-8 h-8 rounded-full bg-brand-gold/10 flex items-center justify-center text-brand-gold group-hover:bg-brand-gold group-hover:text-white transition-all">
-                  <Plus size={16} />
-                </div>
-              </div>
-
-              {/* Decorative side accent */}
-              <div className={`absolute top-0 left-0 w-1.5 h-full ${
-                p.category === 'Bottle' ? 'bg-indigo-500' : p.category === 'Spray' ? 'bg-amber-500' : 'bg-rose-500'
-              } opacity-20`} />
-            </button>
-          ))}
-          {filteredProducts.length === 0 && (
-            <div className="col-span-full py-32 text-center opacity-20">
-              <Package size={64} className="mx-auto mb-6" />
-              <p className="font-black uppercase tracking-widest text-sm">No items matching criteria</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Checkout Sidebar */}
-      <div className="w-full lg:w-[420px] flex flex-col bg-brand-dark rounded-[40px] overflow-hidden text-white shadow-2xl order-1 lg:order-2 flex-shrink-0">
-        <div className="p-8 border-b border-white/5 bg-white/5">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xl font-black uppercase tracking-tight italic">Checkout <span className="text-brand-gold">Queue</span></h3>
-            <div className="w-10 h-10 bg-brand-gold rounded-xl flex items-center justify-center text-brand-dark font-black text-xs">
-              {cart.reduce((a,b) => a + b.quantity, 0)}
-            </div>
-          </div>
-        </div>
-
-        <div className="p-8 space-y-5">
-          <div className="space-y-2">
-            <label className="text-[9px] font-black text-gray-500 uppercase tracking-[0.3em] ml-2">Assigned Client</label>
-            <select 
-              className="w-full py-5 px-6 bg-white/5 border border-white/10 rounded-3xl appearance-none outline-none font-bold text-white focus:border-brand-gold focus:ring-4 focus:ring-brand-gold/5 transition-all cursor-pointer text-sm"
-              value={selectedCustomer?.id || ''}
-              onChange={(e) => setSelectedCustomer(customers.find(c => c.id === e.target.value) || null)}
-            >
-              <option value="" className="bg-brand-dark">Unassigned...</option>
-              {customers.map(c => <option key={c.id} value={c.id} className="bg-brand-dark">{c.name}</option>)}
-            </select>
-          </div>
-
-          {selectedCustomer && (
-            <div className="p-5 rounded-3xl bg-white/5 border border-white/10">
-              <div className="flex justify-between items-center mb-3">
-                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Credit Health</span>
-                <span className={`text-[10px] font-black ${creditUsagePercent > 100 ? 'text-rose-400' : 'text-brand-gold'}`}>
-                  {creditUsagePercent.toFixed(0)}% Capacity
+                <span className={`text-[8px] font-black uppercase tracking-widest ${p.stockQuantity < 50 ? 'text-rose-500' : 'text-slate-400'}`}>
+                  STOCK: {p.stockQuantity}
                 </span>
               </div>
-              <div className="w-full bg-white/10 h-2 rounded-full overflow-hidden">
-                <div className={`h-full rounded-full transition-all duration-1000 ${creditUsagePercent > 100 ? 'bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.4)]' : 'bg-brand-gold shadow-[0_0_15px_rgba(197,160,40,0.4)]'}`} style={{width: `${Math.min(100, creditUsagePercent)}%`}} />
+              <h4 className="text-[10px] font-bold text-slate-900 line-clamp-2 leading-tight h-8 mb-2">{p.name}</h4>
+              <div className="flex items-center justify-between mt-auto">
+                <p className="text-xs font-black text-brand-gold">{db.formatMoney(p.sellingPrice)}</p>
+                <div className="w-6 h-6 rounded-full bg-brand-gold/10 flex items-center justify-center text-brand-gold group-hover:bg-brand-gold group-hover:text-white transition-all">
+                  <Plus size={12} />
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-8 space-y-4 min-h-[200px] lg:min-h-0 py-2 scrollbar-hide">
-          {cart.map(item => (
-            <div key={item.productId} className="flex items-center justify-between bg-white/5 p-4 rounded-3xl border border-white/5 group hover:border-white/20 transition-all">
-              <div className="flex-1 min-w-0 mr-4">
-                <p className="text-xs font-black truncate text-white/90">{item.productName}</p>
-                <p className="text-[10px] text-gray-500 font-bold mt-0.5">{db.formatMoney(item.price)} per unit</p>
-              </div>
-              <div className="flex items-center space-x-3 bg-brand-dark/40 p-1 rounded-2xl border border-white/10">
-                <button onClick={() => updateQty(item.productId, -1)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-white/10 text-brand-gold transition-colors"><Minus size={14} /></button>
-                <span className="text-xs font-black w-4 text-center">{item.quantity}</span>
-                <button onClick={() => updateQty(item.productId, 1)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-white/10 text-brand-gold transition-colors"><Plus size={14} /></button>
-              </div>
-            </div>
+            </button>
           ))}
-          {cart.length === 0 && (
-            <div className="h-full flex flex-col items-center justify-center opacity-20 py-16">
-              <div className="w-20 h-20 bg-white/5 rounded-[32px] flex items-center justify-center mb-6">
-                 <ShoppingCart size={32} />
-              </div>
-              <p className="text-[10px] font-black uppercase tracking-[0.4em]">Inventory Awaiting</p>
-            </div>
-          )}
-        </div>
-
-        <div className="p-10 bg-black/40 border-t border-white/5 mt-auto">
-          <div className="space-y-3 mb-8">
-            <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-gray-500">
-              <span>Subtotal</span>
-              <span className="text-white">{db.formatMoney(totals.subtotal)}</span>
-            </div>
-            <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-gray-500">
-              <span>VAT (5.0%)</span>
-              <span className="text-white">{db.formatMoney(totals.vat)}</span>
-            </div>
-            <div className="flex justify-between items-end pt-4 border-t border-white/5">
-              <span className="text-xs font-black uppercase tracking-[0.3em] text-gray-400">Total Payable</span>
-              <span className="text-3xl font-black text-brand-gold tracking-tighter">{db.formatMoney(totals.total)}</span>
-            </div>
-          </div>
-
-          <div className="flex gap-3 mb-8">
-            <button 
-              onClick={() => setPaymentType('Cash')}
-              className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${paymentType === 'Cash' ? 'bg-brand-gold text-brand-dark border-brand-gold shadow-lg shadow-brand-gold/20' : 'border-white/10 text-gray-500 hover:text-white'}`}
-            >
-              Cash Transaction
-            </button>
-            <button 
-              onClick={() => setPaymentType('Credit')}
-              className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${paymentType === 'Credit' ? 'bg-brand-gold text-brand-dark border-brand-gold shadow-lg shadow-brand-gold/20' : 'border-white/10 text-gray-500 hover:text-white'}`}
-            >
-              Credit Ledger
-            </button>
-          </div>
-
-          <button 
-            disabled={!selectedCustomer || cart.length === 0}
-            onClick={handleCheckoutInitiate}
-            className="w-full py-6 bg-white text-brand-dark rounded-3xl font-black uppercase tracking-widest text-sm hover:bg-brand-gold transition-all disabled:opacity-10 active:scale-[0.98] flex items-center justify-center space-x-3 shadow-2xl"
-          >
-            <span>Process Intelligence</span>
-            <ArrowRight size={20} />
-          </button>
         </div>
       </div>
 
-      {/* Overlays / Modals */}
-      {showCreditWarning && (
-        <div className="fixed inset-0 z-[110] bg-brand-dark/95 backdrop-blur-2xl flex items-center justify-center p-6">
-          <div className="bg-white rounded-[48px] max-w-lg w-full p-12 text-center shadow-2xl animate-in zoom-in-95">
-            <div className="w-24 h-24 bg-rose-50 flex items-center justify-center mx-auto mb-10 rounded-[32px] text-rose-500 shadow-inner">
-              <AlertCircle size={48} />
+      {/* Desktop Sidebar / Mobile Drawer Overlay */}
+      <div className={`
+        fixed inset-0 z-50 transition-transform duration-500 transform lg:relative lg:translate-y-0 lg:z-0 lg:w-[380px] lg:flex
+        ${isCartOpen ? 'translate-y-0' : 'translate-y-full lg:translate-y-0'}
+      `}>
+        <div className="absolute inset-0 bg-black/40 lg:hidden" onClick={() => setIsCartOpen(false)} />
+        <div className="absolute bottom-0 left-0 right-0 h-[90vh] lg:h-full bg-brand-dark rounded-t-[32px] lg:rounded-[40px] flex flex-col shadow-2xl overflow-hidden">
+          <div className="p-6 border-b border-white/5 flex items-center justify-between">
+            <h3 className="text-lg font-black text-white italic uppercase tracking-tight">Checkout <span className="text-brand-gold">Flow</span></h3>
+            <button onClick={() => setIsCartOpen(false)} className="lg:hidden p-2 text-white/40 hover:text-white"><X size={24} /></button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide">
+            <div className="space-y-2">
+              <label className="text-[8px] font-black text-gray-500 uppercase tracking-widest ml-1">Client Authorization</label>
+              <select 
+                className="w-full py-4 px-4 bg-white/5 border border-white/10 rounded-2xl outline-none font-bold text-white focus:border-brand-gold transition-all text-sm"
+                value={selectedCustomer?.id || ''}
+                onChange={(e) => setSelectedCustomer(customers.find(c => c.id === e.target.value) || null)}
+              >
+                <option value="" className="bg-brand-dark">Unassigned...</option>
+                {customers.map(c => <option key={c.id} value={c.id} className="bg-brand-dark">{c.name}</option>)}
+              </select>
             </div>
-            <h3 className="text-3xl font-black text-brand-dark mb-4 uppercase tracking-tighter italic">Risk Parameters <span className="text-rose-500">Exceeded</span></h3>
-            <p className="text-slate-500 mb-10 text-lg font-medium leading-relaxed italic">Customer has insufficient credit capacity or overdue accounts. Administrator authorization required to proceed.</p>
-            <div className="space-y-4">
-              <button onClick={() => { setIsOverrideActive(true); setShowCreditWarning(false); setShowConfirmModal(true); }} className="w-full py-5 bg-brand-dark text-white rounded-[24px] font-black text-xs uppercase tracking-[0.2em] flex items-center justify-center space-x-3 shadow-2xl hover:bg-black transition-colors">
-                <ShieldCheck size={20} className="text-brand-gold" /> <span>Administrative Override</span>
-              </button>
-              <button onClick={() => setShowCreditWarning(false)} className="w-full py-5 text-slate-400 font-bold text-[10px] uppercase tracking-widest">Abort Transaction</button>
+
+            <div className="space-y-3">
+              {cart.map(item => (
+                <div key={item.productId} className="flex items-center justify-between bg-white/5 p-3 rounded-2xl border border-white/5">
+                  <div className="flex-1 min-w-0 mr-4">
+                    <p className="text-xs font-bold text-white truncate">{item.productName}</p>
+                    <p className="text-[10px] text-brand-gold mt-1">{db.formatMoney(item.price)}</p>
+                  </div>
+                  <div className="flex items-center space-x-3 bg-brand-dark/50 p-1.5 rounded-xl border border-white/5">
+                    <button onClick={() => updateQty(item.productId, -1)} className="text-brand-gold hover:scale-110"><Minus size={14} /></button>
+                    <span className="text-xs font-black text-white w-4 text-center">{item.quantity}</span>
+                    <button onClick={() => updateQty(item.productId, 1)} className="text-brand-gold hover:scale-110"><Plus size={14} /></button>
+                  </div>
+                </div>
+              ))}
+              {cart.length === 0 && <p className="text-center py-10 text-white/20 text-xs font-black uppercase tracking-widest">Cart is empty</p>}
             </div>
           </div>
+
+          <div className="p-6 bg-black/40 border-t border-white/5">
+            <div className="space-y-2 mb-6">
+              <div className="flex justify-between text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                <span>Subtotal</span>
+                <span className="text-white">{db.formatMoney(totals.subtotal)}</span>
+              </div>
+              <div className="flex justify-between text-lg font-black text-brand-gold">
+                <span className="uppercase tracking-tight italic">Net Total</span>
+                <span>{db.formatMoney(totals.total)}</span>
+              </div>
+            </div>
+
+            <div className="flex gap-2 mb-4">
+              <button onClick={() => setPaymentType('Cash')} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${paymentType === 'Cash' ? 'bg-brand-gold text-brand-dark border-brand-gold' : 'border-white/10 text-gray-500'}`}>Cash</button>
+              <button onClick={() => setPaymentType('Credit')} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${paymentType === 'Credit' ? 'bg-brand-gold text-brand-dark border-brand-gold' : 'border-white/10 text-gray-500'}`}>Credit</button>
+            </div>
+
+            <Button 
+              className="w-full py-5 rounded-2xl" 
+              disabled={!selectedCustomer || cart.length === 0 || loading}
+              onClick={handleCheckoutInitiate}
+            >
+              Execute Transaction
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile Sticky Bar */}
+      {cart.length > 0 && !isCartOpen && (
+        <div className="lg:hidden fixed bottom-6 left-6 right-6 z-40 animate-in slide-in-from-bottom-10">
+          <button 
+            onClick={() => setIsCartOpen(true)}
+            className="w-full bg-brand-gold text-brand-dark p-4 rounded-3xl shadow-2xl flex items-center justify-between font-black uppercase tracking-widest italic active:scale-95 transition-transform"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="bg-brand-dark text-brand-gold w-8 h-8 rounded-xl flex items-center justify-center text-xs">
+                {cart.reduce((a,b) => a + b.quantity, 0)}
+              </div>
+              <span className="text-xs">View Cart</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className="text-sm">{db.formatMoney(totals.total)}</span>
+              <ChevronUp size={18} />
+            </div>
+          </button>
         </div>
       )}
 
-      <Modal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} title="Operational Verification">
-        <div className="space-y-8">
-          <div className="bg-brand-linen/40 p-8 rounded-[40px] border border-brand-linen/60">
-            <div className="flex justify-between items-center mb-6">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Validation Ledger</span>
-              <Badge color={paymentType === 'Cash' ? 'emerald' : 'gold'}>{paymentType} Basis</Badge>
-            </div>
-            <div className="flex flex-col space-y-2">
-              <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Authorized To:</span>
-              <span className="text-2xl font-black text-brand-dark tracking-tighter italic">{selectedCustomer?.name}</span>
-            </div>
-            <div className="mt-8 pt-6 border-t border-brand-linen flex justify-between items-end">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Invoice</span>
-              <span className="text-3xl font-black text-brand-gold tracking-tighter">{db.formatMoney(totals.total)}</span>
+      {/* Confirmation Modals */}
+      <Modal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} title="Final Validation">
+        <div className="space-y-6">
+          <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Authorized Entity</p>
+            <p className="text-xl font-black text-brand-dark italic uppercase">{selectedCustomer?.name}</p>
+            <div className="mt-4 pt-4 border-t border-slate-200 flex justify-between items-end">
+              <span className="text-xs font-bold text-slate-400">VALUATION:</span>
+              <span className="text-2xl font-black text-brand-gold">{db.formatMoney(totals.total)}</span>
             </div>
           </div>
           <div className="flex gap-4">
-            <Button variant="outline" size="lg" className="flex-1 rounded-3xl" onClick={() => setShowConfirmModal(false)}>Audit Selection</Button>
-            <Button size="lg" className="flex-1 rounded-3xl" onClick={finalizeCheckout}>Execute Sale</Button>
+            <Button variant="outline" className="flex-1" onClick={() => setShowConfirmModal(false)}>Audit</Button>
+            <Button className="flex-1" onClick={finalizeCheckout} disabled={loading}>Confirm Sale</Button>
           </div>
         </div>
       </Modal>
 
       {lastOrder && (
-        <div className="fixed inset-0 z-[120] bg-brand-dark/98 backdrop-blur-3xl flex items-center justify-center p-6">
-          <div className="bg-white rounded-[56px] max-w-md w-full overflow-hidden shadow-2xl animate-in zoom-in-95 duration-500">
-            <div className="bg-emerald-500 p-12 text-center text-white relative">
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-10 font-black text-9xl italic">OK</div>
-              <div className="w-20 h-20 bg-white rounded-[28px] flex items-center justify-center mx-auto mb-8 shadow-2xl relative z-10">
-                <CheckCircle2 size={40} className="text-emerald-500" />
-              </div>
-              <h3 className="text-3xl font-black uppercase tracking-tight italic relative z-10">Transmission <span className="text-black/20">Complete</span></h3>
-              <p className="text-emerald-100 text-[10px] font-black uppercase tracking-[0.5em] mt-3 relative z-10">{lastOrder.id}</p>
+        <div className="fixed inset-0 z-[100] bg-brand-dark/95 backdrop-blur-xl flex items-center justify-center p-6">
+          <div className="bg-white max-w-sm w-full rounded-[40px] p-10 text-center shadow-2xl animate-in zoom-in-95">
+            <div className="w-20 h-20 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6">
+              <CheckCircle2 size={48} />
             </div>
-            <div className="p-12 space-y-5">
-              <Button size="lg" className="w-full py-6 rounded-3xl text-sm" onClick={resetPOS}>Next Transaction</Button>
-              <div className="flex gap-3">
-                 <Button variant="outline" size="md" className="flex-1 rounded-2xl text-[9px]" onClick={() => window.print()} icon={<Printer size={18} />}>Print Invoice</Button>
-                 <Button variant="secondary" size="md" className="flex-1 rounded-2xl text-[9px]" onClick={navigateToHistory} icon={<History size={18} />}>Review History</Button>
-              </div>
+            <h3 className="text-2xl font-black text-brand-dark mb-2">Verified</h3>
+            <p className="text-slate-500 text-sm mb-8">Transmission complete. Order ID: <span className="font-bold text-brand-gold">{lastOrder.id}</span></p>
+            <div className="grid grid-cols-1 gap-3">
+              <Button icon={<Printer size={18} />} onClick={() => window.print()}>Print Receipt</Button>
+              <Button variant="outline" onClick={() => setLastOrder(null)}>Next Transaction</Button>
             </div>
           </div>
+        </div>
+      )}
+
+      {errorMsg && (
+        <div className="fixed top-10 left-1/2 -translate-x-1/2 z-[200] bg-rose-600 text-white px-6 py-4 rounded-full shadow-2xl font-black uppercase tracking-widest text-[10px] flex items-center space-x-3">
+          <AlertCircle size={18} />
+          <span>{errorMsg}</span>
+          <button onClick={() => setErrorMsg(null)} className="ml-2 hover:opacity-50"><X size={16}/></button>
         </div>
       )}
     </div>

@@ -11,6 +11,7 @@ import { Expenses } from './views/Expenses';
 import { Setup } from './views/Setup';
 import { Login } from './views/Login';
 import { SignUp } from './views/SignUp';
+import { Containers } from './views/Containers';
 import { db } from './services/mockData';
 import { auth } from './services/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
@@ -28,9 +29,7 @@ const App: React.FC = () => {
       setUser(firebaseUser);
       if (firebaseUser) {
         db.startSync();
-        // Reactive listener for settings
         db.setSettingsListener((settings) => {
-          // If we are actively transitioning, don't flip the state back until confirmed
           if (settings && settings.setupComplete) {
             setSetupRequired(false);
           } else {
@@ -70,7 +69,6 @@ const App: React.FC = () => {
     );
   }
 
-  // Final check to avoid rendering the app before sync resolves
   if (setupRequired === null) {
     return (
       <div className="min-h-screen bg-brand-dark flex flex-col items-center justify-center">
@@ -86,14 +84,15 @@ const App: React.FC = () => {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'dashboard': return <Dashboard />;
-      case 'inventory': return <Inventory />;
-      case 'customers': return <Customers />;
-      case 'pos':       return <POS setActiveTab={setActiveTab} />;
-      case 'orders':    return <OrderHistory />;
-      case 'expenses':  return <Expenses />;
-      case 'reports':   return <Reports />;
-      default:          return <Dashboard />;
+      case 'dashboard':  return <Dashboard />;
+      case 'inventory':  return <Inventory />;
+      case 'containers': return <Containers />;
+      case 'customers':  return <Customers />;
+      case 'pos':        return <POS setActiveTab={setActiveTab} />;
+      case 'orders':     return <OrderHistory />;
+      case 'expenses':   return <Expenses />;
+      case 'reports':    return <Reports />;
+      default:           return <Dashboard />;
     }
   };
 

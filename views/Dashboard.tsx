@@ -1,76 +1,88 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   TrendingUp, 
   AlertCircle, 
   CreditCard, 
   Package, 
   ArrowUpRight, 
-  ArrowDownRight,
   MoreVertical,
   ChevronRight,
-  ShoppingCart
+  ShoppingCart,
+  Wallet,
+  Zap,
+  BarChart4
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { db } from '../services/mockData';
 
-const data = [
-  { name: 'Mon', revenue: 4000, profit: 2400 },
-  { name: 'Tue', revenue: 3000, profit: 1398 },
-  { name: 'Wed', revenue: 2000, profit: 9800 },
-  { name: 'Thu', revenue: 2780, profit: 3908 },
-  { name: 'Fri', revenue: 1890, profit: 4800 },
-  { name: 'Sat', revenue: 2390, profit: 3800 },
-  { name: 'Sun', revenue: 3490, profit: 4300 },
-];
-
 export const Dashboard: React.FC = () => {
+  const [viewMode, setViewMode] = useState<'live' | 'reports'>('live');
+  
+  // Real-time synchronization
+  const [, setTick] = useState(0);
+  useEffect(() => db.subscribe(() => setTick(t => t + 1)), []);
+
   const stats = db.getDashboardStats();
+  const chartData = db.getTrajectoryData();
 
   return (
     <div className="space-y-6 md:space-y-10">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl md:text-4xl font-black text-brand-dark tracking-tighter uppercase italic">Operational<span className="text-brand-gold">Overview</span></h2>
-          <p className="text-gray-400 text-xs md:text-sm font-medium">Metrics for {new Date().toLocaleDateString(undefined, {month: 'long', day: 'numeric'})}.</p>
+          <p className="text-gray-400 text-xs md:text-sm font-medium">Intel for {new Date().toLocaleDateString(undefined, {month: 'long', day: 'numeric'})}.</p>
         </div>
-        <div className="flex items-center space-x-2 bg-brand-linen/40 p-1.5 rounded-xl border border-brand-linen self-start md:self-center">
-           <div className="px-3 py-1.5 bg-white rounded-lg shadow-sm text-[9px] font-black text-brand-dark uppercase tracking-widest">Live</div>
-           <div className="px-3 py-1.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">Reports</div>
+        
+        {/* VIEW TOGGLE */}
+        <div className="flex items-center space-x-1 bg-brand-linen/40 p-1.5 rounded-2xl border border-brand-linen self-start md:self-center">
+           <button 
+            onClick={() => setViewMode('live')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'live' ? 'bg-white shadow-sm text-brand-gold' : 'text-gray-400 hover:text-brand-dark'}`}
+           >
+             <Zap size={14} />
+             <span>Live View</span>
+           </button>
+           <button 
+            onClick={() => setViewMode('reports')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'reports' ? 'bg-white shadow-sm text-brand-gold' : 'text-gray-400 hover:text-brand-dark'}`}
+           >
+             <BarChart4 size={14} />
+             <span>Report View</span>
+           </button>
         </div>
       </div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-8">
         <StatCard 
-          title="Daily Revenue" 
-          value={db.formatMoney(stats.todaySales)} 
+          title={viewMode === 'live' ? "Today's Revenue" : "Gross Turnover"} 
+          value={db.formatMoney(viewMode === 'live' ? stats.todaySales : stats.totalRevenue)} 
           icon={<TrendingUp className="text-brand-dark" size={20} />}
-          trend="+12% Since Open"
+          trend={viewMode === 'live' ? "Active Session" : "Lifetime Accumulation"}
           color="gold"
         />
         <StatCard 
-          title="Gross Turnover" 
-          value={db.formatMoney(stats.totalRevenue)} 
-          icon={<ArrowUpRight className="text-white" size={20} />}
-          trend="Lifetime Period"
+          title="Net Profit" 
+          value={db.formatMoney(stats.netProfit)} 
+          icon={<Wallet className="text-white" size={20} />}
+          trend="Post-Expenditure"
           color="dark"
+        />
+        <StatCard 
+          title="Inventory Value" 
+          value={db.formatMoney(stats.totalInventoryValue)} 
+          icon={<Package className="text-brand-gold" size={20} />}
+          trend="Asset Capital"
+          color="linen"
         />
         <StatCard 
           title="Active Credit" 
           value={db.formatMoney(stats.outstandingCredit)} 
-          icon={<CreditCard className="text-brand-gold" size={20} />}
-          trend={`${stats.overdueCustomersCount} flagged accts`}
-          color="linen"
-          isAlert={stats.overdueCustomersCount > 0}
-        />
-        <StatCard 
-          title="Low Stock" 
-          value={stats.lowStockAlerts.toString()} 
-          icon={<Package className="text-rose-600" size={20} />}
-          trend="Immediate Restock"
+          icon={<CreditCard className="text-rose-600" size={20} />}
+          trend={`${stats.overdueCustomersCount} flagged items`}
           color="rose"
-          isAlert={stats.lowStockAlerts > 0}
+          isAlert={stats.overdueCustomersCount > 0}
         />
       </div>
 
@@ -80,16 +92,12 @@ export const Dashboard: React.FC = () => {
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
             <div>
               <h3 className="text-lg md:text-xl font-black text-brand-dark uppercase tracking-tight italic">Revenue <span className="text-brand-gold">Trajectory</span></h3>
-              <p className="text-[9px] md:text-xs text-gray-400 font-medium uppercase tracking-widest mt-1">7-Day Intel</p>
+              <p className="text-[9px] md:text-xs text-gray-400 font-medium uppercase tracking-widest mt-1">Real-Time 7-Day Performance</p>
             </div>
-            <select className="bg-brand-linen/50 border-none rounded-xl px-4 py-2 text-[10px] font-black text-brand-dark outline-none cursor-pointer uppercase tracking-widest self-start md:self-center">
-              <option>Week</option>
-              <option>Month</option>
-            </select>
           </div>
           <div className="h-[250px] md:h-[350px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data}>
+              <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="colorGold" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#C5A028" stopOpacity={0.2}/>
@@ -109,9 +117,9 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white p-6 md:p-10 rounded-[32px] md:rounded-[40px] shadow-sm border border-brand-linen/50">
+        <div className="bg-white p-6 md:p-10 rounded-[32px] md:rounded-[40px] shadow-sm border border-brand-linen/50 overflow-hidden">
           <h3 className="text-lg md:text-xl font-black text-brand-dark uppercase tracking-tight italic mb-6">Recent <span className="text-brand-gold">Flow</span></h3>
-          <div className="space-y-6 overflow-hidden">
+          <div className="space-y-6">
             {db.getOrders().slice(0, 5).map((order) => (
               <div key={order.id} className="flex items-center space-x-4 group">
                 <div className="w-10 h-10 rounded-xl bg-brand-linen/50 flex items-center justify-center font-black text-brand-dark text-xs flex-shrink-0">
@@ -134,7 +142,7 @@ export const Dashboard: React.FC = () => {
             {db.getOrders().length === 0 && (
               <div className="text-center py-10 opacity-20">
                 <ShoppingCart className="mx-auto mb-4" size={40} />
-                <p className="text-[10px] font-black uppercase tracking-widest">No Sales</p>
+                <p className="text-[10px] font-black uppercase tracking-widest">No Sales Recorded</p>
               </div>
             )}
           </div>

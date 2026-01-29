@@ -1,16 +1,21 @@
 
-import React, { useState } from 'react';
-import { Package, Search, Plus, Edit2, Trash2, Filter, AlertTriangle, Box, DollarSign } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Package, Search, Plus, Edit2, Trash2, Box, AlertTriangle, Download, Printer } from 'lucide-react';
 import { db } from '../services/mockData';
 import { CATEGORIES } from '../constants';
 import { Card, Button, Input, Modal, Badge } from '../components/UI';
-import { Category } from '../types';
+import { Category, Product } from '../types';
 
 export const Inventory: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('All');
-  const [products, setProducts] = useState(db.getProducts());
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  
+  // Real-time synchronization tick
+  const [, setTick] = useState(0);
+  useEffect(() => db.subscribe(() => setTick(t => t + 1)), []);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -21,16 +26,36 @@ export const Inventory: React.FC = () => {
     stockQuantity: ''
   });
 
-  const filteredProducts = products.filter(p => {
+  const filteredProducts = db.getProducts().filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = filterCategory === 'All' || p.category === filterCategory;
     return matchesSearch && matchesCategory;
   });
 
-  const handleAddProduct = (e: React.FormEvent) => {
+  const totalInvValue = filteredProducts.reduce((sum, p) => sum + (p.costPrice * p.stockQuantity), 0);
+
+  const handleOpenAdd = () => {
+    setEditingProduct(null);
+    setFormData({ name: '', category: 'Bottle', size: '', costPrice: '', sellingPrice: '', stockQuantity: '' });
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEdit = (p: Product) => {
+    setEditingProduct(p);
+    setFormData({
+      name: p.name,
+      category: p.category,
+      size: p.size.toString(),
+      costPrice: p.costPrice.toString(),
+      sellingPrice: p.sellingPrice.toString(),
+      stockQuantity: p.stockQuantity.toString()
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newProduct = {
-      id: Math.random().toString(36).substr(2, 9),
+    const productData = {
       name: formData.name,
       category: formData.category,
       size: parseInt(formData.size) || 0,
@@ -38,38 +63,58 @@ export const Inventory: React.FC = () => {
       sellingPrice: parseFloat(formData.sellingPrice),
       stockQuantity: parseInt(formData.stockQuantity)
     };
-    db.addProduct(newProduct);
-    setProducts([...db.getProducts()]);
-    setIsModalOpen(false);
-    setFormData({ name: '', category: 'Bottle', size: '', costPrice: '', sellingPrice: '', stockQuantity: '' });
+
+    try {
+      if (editingProduct) {
+        await db.updateProduct(editingProduct.id, productData);
+      } else {
+        await db.addProduct({
+          id: Math.random().toString(36).substr(2, 9),
+          ...productData
+        });
+      }
+      setIsModalOpen(false);
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await db.deleteProduct(id);
+      setConfirmDelete(null);
+    } catch (err: any) {
+      alert(err.message);
+    }
   };
 
   const currencySymbol = db.getSettings()?.currencySymbol || '$';
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 md:space-y-8 print:bg-white print:p-0">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-slate-900">Inventory</h2>
-          <p className="text-slate-500 mt-1">Manage stock levels and product pricing.</p>
+          <h2 className="text-2xl md:text-3xl font-bold text-slate-900">Inventory Management</h2>
+          <p className="text-slate-500 mt-1 text-sm md:text-base">Total Asset Value: <span className="text-brand-gold font-black">{db.formatMoney(totalInvValue)}</span></p>
         </div>
-        <Button icon={<Plus size={20} />} onClick={() => setIsModalOpen(true)}>
-          Add Product
-        </Button>
+        <div className="flex space-x-2">
+          <Button variant="outline" size="sm" className="print:hidden hidden sm:inline-flex" icon={<Printer size={18} />} onClick={() => window.print()}>Print</Button>
+          <Button size="sm" icon={<Plus size={18} />} onClick={handleOpenAdd}>Add Product</Button>
+        </div>
       </div>
 
-      <Card className="flex flex-col lg:flex-row gap-4 py-4 px-4 bg-white">
+      <Card className="flex flex-col lg:flex-row gap-4 py-3 px-3 md:py-4 md:px-4 bg-white print:hidden">
         <div className="flex-1 relative">
           <Input 
-            icon={<Search size={20} />} 
-            placeholder="Search products by name..." 
+            icon={<Search size={18} />} 
+            placeholder="Search catalogue..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <div className="flex gap-4">
+        <div className="flex gap-2">
           <select 
-            className="px-4 py-3 bg-slate-50 border-none rounded-xl font-medium text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none"
+            className="flex-1 lg:flex-none px-4 py-3.5 bg-brand-linen/50 border-none rounded-2xl font-bold text-[10px] md:text-xs uppercase tracking-widest text-slate-600 focus:ring-2 focus:ring-brand-gold/10 outline-none"
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
           >
@@ -80,49 +125,51 @@ export const Inventory: React.FC = () => {
       </Card>
 
       <Card noPadding>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
+        <div className="overflow-x-auto scrollbar-hide">
+          <table className="w-full text-left min-w-[500px] md:min-w-0">
             <thead>
-              <tr className="bg-slate-50/50 border-b border-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                <th className="px-8 py-5">Product Name</th>
-                <th className="px-8 py-5">Category</th>
-                <th className="px-8 py-5">Size</th>
-                <th className="px-8 py-5 text-right">Cost ({currencySymbol})</th>
-                <th className="px-8 py-5 text-right">Price ({currencySymbol})</th>
-                <th className="px-8 py-5 text-center">Stock</th>
-                <th className="px-8 py-5 text-right">Actions</th>
+              <tr className="bg-slate-50/50 border-b border-slate-50 text-[9px] md:text-[10px] font-black uppercase tracking-widest text-slate-400">
+                <th className="px-5 py-4 md:px-8 md:py-5">Product Details</th>
+                <th className="px-5 py-4 md:px-8 md:py-5 hidden sm:table-cell">Category</th>
+                <th className="px-5 py-4 md:px-8 md:py-5 text-right hidden md:table-cell">Cost</th>
+                <th className="px-5 py-4 md:px-8 md:py-5 text-right">Selling</th>
+                <th className="px-5 py-4 md:px-8 md:py-5 text-center">Stock</th>
+                <th className="px-5 py-4 md:px-8 md:py-5 text-right print:hidden">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {filteredProducts.map((p) => (
                 <tr key={p.id} className="hover:bg-slate-50 transition-colors group">
-                  <td className="px-8 py-5">
+                  <td className="px-5 py-4 md:px-8 md:py-5">
                     <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 group-hover:text-brand-gold transition-colors">
-                        <Package size={16} />
+                      <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 shrink-0">
+                        <Package size={14} />
                       </div>
-                      <span className="font-bold text-slate-900 truncate max-w-[250px]">{p.name}</span>
+                      <div className="min-w-0">
+                        <span className="font-bold text-slate-900 block truncate text-sm md:text-base">{p.name}</span>
+                        <span className="text-[8px] md:text-[10px] text-slate-400 uppercase tracking-widest font-bold">{p.size}ml</span>
+                      </div>
                     </div>
                   </td>
-                  <td className="px-8 py-5">
+                  <td className="px-5 py-4 md:px-8 md:py-5 hidden sm:table-cell">
                     <Badge color={p.category === 'Bottle' ? 'indigo' : p.category === 'Spray' ? 'amber' : 'rose'}>
                       {p.category}
                     </Badge>
                   </td>
-                  <td className="px-8 py-5 text-sm text-slate-500 font-medium">{p.size > 0 ? `${p.size}ml` : '-'}</td>
-                  <td className="px-8 py-5 text-right font-medium text-slate-400">{db.formatMoney(p.costPrice)}</td>
-                  <td className="px-8 py-5 text-right font-black text-indigo-600">{db.formatMoney(p.sellingPrice)}</td>
-                  <td className="px-8 py-5 text-center">
-                    <div className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl font-bold text-sm ${
+                  <td className="px-5 py-4 md:px-8 md:py-5 text-right font-medium text-slate-400 hidden md:table-cell">{db.formatMoney(p.costPrice)}</td>
+                  <td className="px-5 py-4 md:px-8 md:py-5 text-right font-black text-brand-gold text-sm md:text-base">{db.formatMoney(p.sellingPrice)}</td>
+                  <td className="px-5 py-4 md:px-8 md:py-5 text-center">
+                    <div className={`inline-flex items-center space-x-1 px-2.5 py-1 md:px-3 md:py-1.5 rounded-xl font-bold text-[10px] md:text-sm ${
                       p.stockQuantity < 50 ? 'bg-rose-50 text-rose-600' : 'bg-slate-50 text-slate-900'
                     }`}>
                       <span>{p.stockQuantity}</span>
-                      {p.stockQuantity < 50 && <AlertTriangle size={14} />}
+                      {p.stockQuantity < 50 && <AlertTriangle size={12} />}
                     </div>
                   </td>
-                  <td className="px-8 py-5 text-right">
-                    <div className="flex items-center justify-end space-x-2">
-                      <Button variant="ghost" size="sm" icon={<Edit2 size={16} />} />
+                  <td className="px-5 py-4 md:px-8 md:py-5 text-right print:hidden">
+                    <div className="flex items-center justify-end space-x-1 md:space-x-2">
+                      <button onClick={() => handleOpenEdit(p)} className="p-2 text-slate-400 hover:text-brand-gold transition-colors"><Edit2 size={14} /></button>
+                      <button onClick={() => setConfirmDelete(p.id)} className="p-2 text-slate-400 hover:text-rose-600 transition-colors"><Trash2 size={14} /></button>
                     </div>
                   </td>
                 </tr>
@@ -130,28 +177,29 @@ export const Inventory: React.FC = () => {
             </tbody>
           </table>
           {filteredProducts.length === 0 && (
-            <div className="text-center py-24">
-              <Box className="mx-auto text-slate-100 mb-4" size={64} />
-              <p className="text-slate-400 font-bold">No products found</p>
+            <div className="text-center py-16 md:py-24">
+              <Box className="mx-auto text-slate-100 mb-4" size={48} md:size={64} />
+              <p className="text-slate-400 font-bold text-sm">Catalogue is currently empty</p>
             </div>
           )}
         </div>
       </Card>
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Add New Product">
-        <form onSubmit={handleAddProduct} className="space-y-6">
+      {/* Modals remain the same but use refined UI sizing */}
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingProduct ? "Edit Intelligence" : "Record New Product"}>
+        <form onSubmit={handleSubmit} className="space-y-4 md:space-y-6">
           <Input 
-            label="Product Name" 
-            placeholder="e.g. Classic Gold Bottle" 
+            label="Label Name" 
+            placeholder="e.g. Amber Glass Elite" 
             required 
             value={formData.name}
             onChange={(e) => setFormData({...formData, name: e.target.value})}
           />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3 md:gap-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Category</label>
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Category</label>
               <select 
-                className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-medium"
+                className="w-full px-5 py-3.5 bg-brand-linen/50 border-none rounded-[18px] focus:ring-2 focus:ring-brand-gold/20 outline-none transition-all font-medium text-sm"
                 value={formData.category}
                 onChange={(e) => setFormData({...formData, category: e.target.value as Category})}
               >
@@ -159,16 +207,16 @@ export const Inventory: React.FC = () => {
               </select>
             </div>
             <Input 
-              label="Size (ml)" 
+              label="Volume (ml)" 
               type="number" 
               placeholder="100" 
               value={formData.size}
               onChange={(e) => setFormData({...formData, size: e.target.value})}
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3 md:gap-4">
             <Input 
-              label={`Cost Price (${currencySymbol})`}
+              label={`Unit Cost`}
               type="number" 
               step="0.01" 
               required 
@@ -176,7 +224,7 @@ export const Inventory: React.FC = () => {
               onChange={(e) => setFormData({...formData, costPrice: e.target.value})}
             />
             <Input 
-              label={`Selling Price (${currencySymbol})`}
+              label={`Market Price`}
               type="number" 
               step="0.01" 
               required 
@@ -185,18 +233,33 @@ export const Inventory: React.FC = () => {
             />
           </div>
           <Input 
-            label="Initial Stock" 
+            label="Current Inventory" 
             type="number" 
             required 
             value={formData.stockQuantity}
             onChange={(e) => setFormData({...formData, stockQuantity: e.target.value})}
           />
-          <div className="flex gap-4 pt-4">
-            <Button variant="outline" className="flex-1" type="button" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-            <Button className="flex-1" type="submit">Create Product</Button>
+          <div className="flex gap-3 md:gap-4 pt-4">
+            <Button variant="outline" className="flex-1" type="button" onClick={() => setIsModalOpen(false)}>Abort</Button>
+            <Button className="flex-1" type="submit">{editingProduct ? "Update Intel" : "Deploy Product"}</Button>
           </div>
         </form>
       </Modal>
+
+      {confirmDelete && (
+        <Modal isOpen={!!confirmDelete} onClose={() => setConfirmDelete(null)} title="Destructive Action">
+          <div className="text-center p-2 md:p-4">
+            <div className="w-12 h-12 md:w-16 md:h-16 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Trash2 size={24} md:size={32} />
+            </div>
+            <p className="text-slate-600 font-medium mb-8 text-sm md:text-base">This action will permanently purge this product from the registry. This cannot be undone.</p>
+            <div className="flex gap-3 md:gap-4">
+              <Button variant="outline" className="flex-1" onClick={() => setConfirmDelete(null)}>Keep</Button>
+              <Button variant="danger" className="flex-1" onClick={() => handleDelete(confirmDelete)}>Execute Purge</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };
