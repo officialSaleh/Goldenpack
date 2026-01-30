@@ -7,7 +7,8 @@ import {
   User, 
   AppSettings,
   DashboardStats,
-  Container 
+  Container,
+  Payment 
 } from '../types';
 import { db_firestore } from './firebase';
 import { 
@@ -140,8 +141,8 @@ class DB {
 
   formatMoney(amount: number) {
     const symbol = this.settings?.currencySymbol || '$';
-    const formatted = amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return `${symbol} ${formatted}`;
+    const formatted = Math.abs(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return amount < 0 ? `-${symbol} ${formatted}` : `${symbol} ${formatted}`;
   }
 
   getSettings() { return this.settings; }
@@ -165,12 +166,9 @@ class DB {
 
   async createOrder(order: Order) {
     await runTransaction(db_firestore, async (transaction) => {
-      // 1. DATA COLLECTION (Read Phase Only)
-      // Deduplicate product IDs to avoid redundant reads
       const uniqueProductIds = Array.from(new Set(order.items.map(item => item.productId)));
       const productSnapshots = new Map<string, DocumentSnapshot>();
 
-      // Perform all Product READS sequentially to strictly follow Firestore rules
       for (const productId of uniqueProductIds) {
         const productRef = doc(db_firestore, "products", productId);
         const snap = await transaction.get(productRef);
@@ -180,7 +178,6 @@ class DB {
         productSnapshots.set(productId, snap);
       }
 
-      // Perform Customer READ if applicable
       let customerSnap = null;
       let customerRef = null;
       if (order.paymentType === 'Credit') {
@@ -191,7 +188,6 @@ class DB {
         }
       }
 
-      // 2. LOGICAL VALIDATION (Memory Phase - No DB operations)
       const stockUpdates = [];
       for (const item of order.items) {
         const snap = productSnapshots.get(item.productId);
@@ -204,32 +200,58 @@ class DB {
           throw new Error(`Insufficient stock for ${item.productName}. Available: ${currentStock}`);
         }
 
-        // Prepare the update
         stockUpdates.push({
           ref: snap.ref,
           newStock: currentStock - item.quantity
         });
       }
 
-      // 3. EXECUTION PHASE (Write Phase Only - No Reads allowed after this point)
-      
-      // Update inventory levels
       for (const update of stockUpdates) {
         transaction.update(update.ref, { stockQuantity: update.newStock });
       }
 
-      // Update customer balance for credit sales
       if (customerRef && customerSnap) {
         const currentBalance = customerSnap.data()?.outstandingBalance || 0;
         transaction.update(customerRef, { outstandingBalance: currentBalance + order.total });
       }
 
-      // Commit the transaction record
       const orderRef = doc(db_firestore, "orders", order.id);
       transaction.set(orderRef, order);
     });
 
-    // Notify local subscribers
+    this.notify();
+  }
+
+  async collectPayment(customerId: string, amount: number, method: string) {
+    await runTransaction(db_firestore, async (transaction) => {
+      // 1. READ
+      const customerRef = doc(db_firestore, "customers", customerId);
+      const customerSnap = await transaction.get(customerRef);
+
+      if (!customerSnap.exists()) {
+        throw new Error("Customer not found.");
+      }
+
+      const currentBalance = customerSnap.data()?.outstandingBalance || 0;
+      const newBalance = currentBalance - amount;
+
+      // 2. WRITE
+      transaction.update(customerRef, { outstandingBalance: newBalance });
+
+      // Create a payment record for audit
+      const paymentId = `PAY-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+      const paymentRef = doc(db_firestore, "payments", paymentId);
+      const paymentData = {
+        id: paymentId,
+        customerId,
+        amount,
+        date: new Date().toISOString().split('T')[0],
+        method,
+        previousBalance: currentBalance,
+        newBalance
+      };
+      transaction.set(paymentRef, paymentData);
+    });
     this.notify();
   }
 
