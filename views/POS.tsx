@@ -57,7 +57,8 @@ export const POS: React.FC = () => {
         const p = products.find(prod => prod.id === id);
         let newQty = absoluteValue !== undefined ? absoluteValue : item.quantity + delta;
         
-        // Validation: Clamp between 0 and stock level
+        // Validation: Clamp between 0 and stock level. 
+        // Note: We do NOT filter the cart here so 0 stays in list.
         if (isNaN(newQty) || newQty < 0) newQty = 0;
         if (p && newQty > p.stockQuantity) newQty = p.stockQuantity;
         
@@ -75,8 +76,9 @@ export const POS: React.FC = () => {
 
   const handleCheckoutInitiate = () => {
     if (!selectedCustomer || cart.length === 0) return;
-    if (cart.every(i => i.quantity === 0)) {
-        setErrorMsg("Cart total quantity is zero. Add items to continue.");
+    // Check if the actual billable quantity is greater than zero
+    if (cart.reduce((sum, item) => sum + item.quantity, 0) === 0) {
+        setErrorMsg("Operational Alert: Total order quantity is zero. Adjust counts to proceed.");
         return;
     }
     setShowConfirmModal(true);
@@ -86,12 +88,15 @@ export const POS: React.FC = () => {
     if (!selectedCustomer) return;
     setLoading(true);
     try {
+      // We filter items to only include those with quantity > 0 for the permanent order record
+      const billableItems = cart.filter(i => i.quantity > 0);
+      
       const order: Order = {
         id: `ORD-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
         customerId: selectedCustomer.id,
         customerName: selectedCustomer.name,
         date: new Date().toISOString().split('T')[0],
-        items: cart.filter(i => i.quantity > 0),
+        items: billableItems,
         ...totals,
         paymentType,
         status: paymentType === 'Cash' ? 'Paid' : 'Pending',
