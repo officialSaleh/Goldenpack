@@ -24,6 +24,7 @@ export interface Product {
   costPrice: number;
   sellingPrice: number;
   stockQuantity: number;
+  warehouseArea?: string;
   imageUrl?: string;
 }
 

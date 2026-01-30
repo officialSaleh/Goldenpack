@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Search, ShoppingCart, Plus, Minus, AlertCircle, Package, CheckCircle2, 
-  ArrowRight, Printer, X, ChevronUp, Scan, Filter, Layers
+  ArrowRight, Printer, X, ChevronUp, Scan, Filter, Layers, Trash2, MapPin
 } from 'lucide-react';
 import { db } from '../services/mockData';
 import { Product, OrderItem, Customer, Order, Category } from '../types';
@@ -51,16 +51,20 @@ export const POS: React.FC = () => {
     setCart(cart.filter(item => item.productId !== id));
   };
 
-  const updateQty = (id: string, delta: number) => {
+  const updateQty = (id: string, delta: number, absoluteValue?: number) => {
     setCart(cart.map(item => {
       if (item.productId === id) {
         const p = products.find(prod => prod.id === id);
-        const newQty = Math.max(0, item.quantity + delta);
-        if (p && newQty > p.stockQuantity) return item;
+        let newQty = absoluteValue !== undefined ? absoluteValue : item.quantity + delta;
+        
+        // Validation: Clamp between 0 and stock level
+        if (isNaN(newQty) || newQty < 0) newQty = 0;
+        if (p && newQty > p.stockQuantity) newQty = p.stockQuantity;
+        
         return { ...item, quantity: newQty };
       }
       return item;
-    }).filter(i => i.quantity > 0));
+    }));
   };
 
   const totals = useMemo(() => {
@@ -71,6 +75,10 @@ export const POS: React.FC = () => {
 
   const handleCheckoutInitiate = () => {
     if (!selectedCustomer || cart.length === 0) return;
+    if (cart.every(i => i.quantity === 0)) {
+        setErrorMsg("Cart total quantity is zero. Add items to continue.");
+        return;
+    }
     setShowConfirmModal(true);
   };
 
@@ -126,7 +134,7 @@ export const POS: React.FC = () => {
             </button>
           </div>
 
-          {/* Category Tabs (Horizontal Scroll) */}
+          {/* Category Tabs */}
           <div className="flex overflow-x-auto scrollbar-hide space-x-2 pb-1">
             <button 
               onClick={() => setSelectedCategory('All')}
@@ -158,7 +166,7 @@ export const POS: React.FC = () => {
                 key={p.id}
                 className={`flex lg:flex-col bg-white border border-slate-100 p-3 lg:p-5 rounded-2xl lg:rounded-[32px] transition-all relative overflow-hidden group ${p.stockQuantity <= 0 ? 'opacity-40 grayscale pointer-events-none' : 'hover:border-brand-gold hover:shadow-xl'}`}
               >
-                {/* Horizontal Content for Mobile */}
+                {/* Product Detail Section */}
                 <div className="flex lg:flex-col flex-1 min-w-0 items-center lg:items-start space-x-4 lg:space-x-0">
                   <div className={`w-12 h-12 lg:w-16 lg:h-16 rounded-2xl lg:rounded-3xl flex items-center justify-center shrink-0 mb-0 lg:mb-4 transition-colors ${p.category === 'Bottle' ? 'bg-indigo-50 text-indigo-600' : p.category === 'Spray' ? 'bg-amber-50 text-amber-600' : 'bg-rose-50 text-rose-600'}`}>
                     <Package size={24} className="lg:w-8 lg:h-8" />
@@ -175,6 +183,14 @@ export const POS: React.FC = () => {
                         {p.stockQuantity} Left
                       </span>
                     </div>
+
+                    {/* Warehouse Area Tag */}
+                    {p.warehouseArea && (
+                      <div className="flex items-center mt-1.5 text-[8px] font-black text-brand-gold uppercase tracking-widest">
+                        <MapPin size={10} className="mr-1" />
+                        <span>{p.warehouseArea}</span>
+                      </div>
+                    )}
                     
                     {/* Visual Stock Bar (Small) */}
                     <div className="hidden lg:block w-full h-1 bg-slate-100 rounded-full mt-3 overflow-hidden">
@@ -191,9 +207,14 @@ export const POS: React.FC = () => {
                   <p className="hidden lg:block text-lg font-black text-brand-dark tracking-tighter">{db.formatMoney(p.sellingPrice)}</p>
                   
                   {isInCart ? (
-                    <div className="flex items-center bg-brand-linen/50 rounded-xl p-1 border border-brand-linen lg:flex-1 lg:max-w-[120px]">
+                    <div className="flex items-center bg-brand-linen/50 rounded-xl p-1 border border-brand-linen lg:flex-1 lg:max-w-[140px]">
                       <button onClick={() => updateQty(p.id, -1)} className="w-8 h-8 lg:w-7 lg:h-7 flex items-center justify-center bg-white rounded-lg text-brand-dark shadow-sm active:scale-90 transition-transform"><Minus size={14}/></button>
-                      <span className="flex-1 text-center font-black text-brand-dark text-xs">{cartItem.quantity}</span>
+                      <input 
+                        type="number"
+                        className="flex-1 w-full text-center font-black text-brand-dark text-xs bg-transparent border-none outline-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        value={cartItem.quantity}
+                        onChange={(e) => updateQty(p.id, 0, parseInt(e.target.value) || 0)}
+                      />
                       <button onClick={() => updateQty(p.id, 1)} className="w-8 h-8 lg:w-7 lg:h-7 flex items-center justify-center bg-white rounded-lg text-brand-dark shadow-sm active:scale-90 transition-transform"><Plus size={14}/></button>
                     </div>
                   ) : (
@@ -236,6 +257,7 @@ export const POS: React.FC = () => {
           </div>
 
           <div className="flex-1 overflow-y-auto p-8 space-y-6 scrollbar-hide">
+            {/* Customer Selection */}
             <div className="space-y-3">
               <label className="text-[9px] font-black text-brand-gold uppercase tracking-[0.3em] ml-1">Assign Customer Entity</label>
               <div className="relative group">
@@ -251,6 +273,7 @@ export const POS: React.FC = () => {
               </div>
             </div>
 
+            {/* Cart Items */}
             <div className="space-y-4 pt-4">
               <div className="flex justify-between items-center px-1">
                  <h4 className="text-[10px] font-black text-gray-600 uppercase tracking-widest">Inventory List ({cart.length})</h4>
@@ -259,16 +282,27 @@ export const POS: React.FC = () => {
               
               <div className="space-y-3">
                 {cart.map(item => (
-                  <div key={item.productId} className="flex items-center bg-white/5 p-5 rounded-[32px] border border-white/5 animate-in slide-in-from-right-5">
+                  <div key={item.productId} className="flex items-center bg-white/5 p-5 rounded-[32px] border border-white/5 animate-in slide-in-from-right-5 relative group">
                     <div className="flex-1 min-w-0 mr-4">
                       <p className="text-sm font-bold text-white truncate leading-tight mb-1">{item.productName}</p>
                       <p className="text-xs font-black text-brand-gold">{db.formatMoney(item.price)}</p>
                     </div>
                     <div className="flex items-center space-x-2 bg-black/40 p-1.5 rounded-2xl">
                       <button onClick={() => updateQty(item.productId, -1)} className="w-8 h-8 flex items-center justify-center rounded-xl bg-white/5 text-brand-gold hover:bg-white/10 active:scale-90 transition-all"><Minus size={14} /></button>
-                      <span className="w-10 text-center font-black text-white text-xs">{item.quantity}</span>
+                      <input 
+                        type="number"
+                        className="w-10 text-center font-black text-white text-xs bg-transparent border-none outline-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        value={item.quantity}
+                        onChange={(e) => updateQty(item.productId, 0, parseInt(e.target.value) || 0)}
+                      />
                       <button onClick={() => updateQty(item.productId, 1)} className="w-8 h-8 flex items-center justify-center rounded-xl bg-white/5 text-brand-gold hover:bg-white/10 active:scale-90 transition-all"><Plus size={14} /></button>
                     </div>
+                    <button 
+                      onClick={() => removeFromCart(item.productId)}
+                      className="absolute -top-1 -right-1 w-6 h-6 bg-rose-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                    >
+                      <X size={12} strokeWidth={3} />
+                    </button>
                   </div>
                 ))}
               </div>

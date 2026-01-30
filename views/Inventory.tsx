@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Package, Search, Plus, Edit2, Trash2, Box, AlertTriangle, Download, Printer } from 'lucide-react';
+import { Package, Search, Plus, Edit2, Trash2, Box, AlertTriangle, Printer, MapPin } from 'lucide-react';
 import { db } from '../services/mockData';
 import { CATEGORIES } from '../constants';
 import { Card, Button, Input, Modal, Badge } from '../components/UI';
@@ -23,7 +23,8 @@ export const Inventory: React.FC = () => {
     size: '',
     costPrice: '',
     sellingPrice: '',
-    stockQuantity: ''
+    stockQuantity: '',
+    warehouseArea: ''
   });
 
   const filteredProducts = db.getProducts().filter(p => {
@@ -36,7 +37,7 @@ export const Inventory: React.FC = () => {
 
   const handleOpenAdd = () => {
     setEditingProduct(null);
-    setFormData({ name: '', category: 'Bottle', size: '', costPrice: '', sellingPrice: '', stockQuantity: '' });
+    setFormData({ name: '', category: 'Bottle', size: '', costPrice: '', sellingPrice: '', stockQuantity: '', warehouseArea: '' });
     setIsModalOpen(true);
   };
 
@@ -48,7 +49,8 @@ export const Inventory: React.FC = () => {
       size: p.size.toString(),
       costPrice: p.costPrice.toString(),
       sellingPrice: p.sellingPrice.toString(),
-      stockQuantity: p.stockQuantity.toString()
+      stockQuantity: p.stockQuantity.toString(),
+      warehouseArea: p.warehouseArea || ''
     });
     setIsModalOpen(true);
   };
@@ -61,7 +63,8 @@ export const Inventory: React.FC = () => {
       size: parseInt(formData.size) || 0,
       costPrice: parseFloat(formData.costPrice),
       sellingPrice: parseFloat(formData.sellingPrice),
-      stockQuantity: parseInt(formData.stockQuantity)
+      stockQuantity: parseInt(formData.stockQuantity),
+      warehouseArea: formData.warehouseArea
     };
 
     try {
@@ -94,20 +97,20 @@ export const Inventory: React.FC = () => {
     <div className="space-y-6 md:space-y-8 print:bg-white print:p-0">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl md:text-3xl font-bold text-slate-900">Inventory Management</h2>
-          <p className="text-slate-500 mt-1 text-sm md:text-base">Total Asset Value: <span className="text-brand-gold font-black">{db.formatMoney(totalInvValue)}</span></p>
+          <h2 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight italic uppercase">Inventory <span className="text-brand-gold">Assets</span></h2>
+          <p className="text-slate-500 mt-1 text-sm md:text-base font-medium">Total Strategic Valuation: <span className="text-brand-gold font-black">{db.formatMoney(totalInvValue)}</span></p>
         </div>
         <div className="flex space-x-2">
-          <Button variant="outline" size="sm" className="print:hidden hidden sm:inline-flex" icon={<Printer size={18} />} onClick={() => window.print()}>Print</Button>
-          <Button size="sm" icon={<Plus size={18} />} onClick={handleOpenAdd}>Add Product</Button>
+          <Button variant="outline" size="sm" className="print:hidden hidden sm:inline-flex" icon={<Printer size={18} />} onClick={() => window.print()}>Print Catalogue</Button>
+          <Button size="sm" icon={<Plus size={18} />} onClick={handleOpenAdd}>Deploy Product</Button>
         </div>
       </div>
 
-      <Card className="flex flex-col lg:flex-row gap-4 py-3 px-3 md:py-4 md:px-4 bg-white print:hidden">
+      <Card className="flex flex-col lg:flex-row gap-4 py-3 px-3 md:py-4 md:px-4 bg-white print:hidden shadow-sm">
         <div className="flex-1 relative">
           <Input 
             icon={<Search size={18} />} 
-            placeholder="Search catalogue..." 
+            placeholder="Search intelligence records..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -130,6 +133,7 @@ export const Inventory: React.FC = () => {
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-50 text-[9px] md:text-[10px] font-black uppercase tracking-widest text-slate-400">
                 <th className="px-5 py-4 md:px-8 md:py-5">Product Details</th>
+                <th className="px-5 py-4 md:px-8 md:py-5 hidden lg:table-cell">Area</th>
                 <th className="px-5 py-4 md:px-8 md:py-5 hidden sm:table-cell">Category</th>
                 <th className="px-5 py-4 md:px-8 md:py-5 text-right hidden md:table-cell">Cost</th>
                 <th className="px-5 py-4 md:px-8 md:py-5 text-right">Selling</th>
@@ -147,9 +151,26 @@ export const Inventory: React.FC = () => {
                       </div>
                       <div className="min-w-0">
                         <span className="font-bold text-slate-900 block truncate text-sm md:text-base">{p.name}</span>
-                        <span className="text-[8px] md:text-[10px] text-slate-400 uppercase tracking-widest font-bold">{p.size}ml</span>
+                        <div className="flex items-center space-x-2">
+                           <span className="text-[8px] md:text-[10px] text-slate-400 uppercase tracking-widest font-black">{p.size}ml</span>
+                           {p.warehouseArea && (
+                             <span className="lg:hidden text-[7px] font-black text-brand-gold uppercase tracking-tighter flex items-center">
+                               <MapPin size={8} className="mr-0.5" /> {p.warehouseArea}
+                             </span>
+                           )}
+                        </div>
                       </div>
                     </div>
+                  </td>
+                  <td className="px-5 py-4 md:px-8 md:py-5 hidden lg:table-cell">
+                    {p.warehouseArea ? (
+                      <div className="flex items-center text-[10px] font-black text-slate-600 uppercase tracking-widest">
+                        <MapPin size={12} className="text-brand-gold mr-2" />
+                        {p.warehouseArea}
+                      </div>
+                    ) : (
+                      <span className="text-[10px] font-bold text-slate-300 italic">Not Assigned</span>
+                    )}
                   </td>
                   <td className="px-5 py-4 md:px-8 md:py-5 hidden sm:table-cell">
                     <Badge color={p.category === 'Bottle' ? 'indigo' : p.category === 'Spray' ? 'amber' : 'rose'}>
@@ -179,17 +200,16 @@ export const Inventory: React.FC = () => {
           {filteredProducts.length === 0 && (
             <div className="text-center py-16 md:py-24">
               <Box className="mx-auto text-slate-100 mb-4" size={48} md:size={64} />
-              <p className="text-slate-400 font-bold text-sm">Catalogue is currently empty</p>
+              <p className="text-slate-400 font-bold text-sm uppercase tracking-widest">Catalogue is currently empty</p>
             </div>
           )}
         </div>
       </Card>
 
-      {/* Modals remain the same but use refined UI sizing */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingProduct ? "Edit Intelligence" : "Record New Product"}>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingProduct ? "Edit Logistics Intelligence" : "Record New Strategic Asset"}>
         <form onSubmit={handleSubmit} className="space-y-4 md:space-y-6">
           <Input 
-            label="Label Name" 
+            label="Product Identity" 
             placeholder="e.g. Amber Glass Elite" 
             required 
             value={formData.name}
@@ -199,7 +219,7 @@ export const Inventory: React.FC = () => {
             <div className="space-y-1.5">
               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Category</label>
               <select 
-                className="w-full px-5 py-3.5 bg-brand-linen/50 border-none rounded-[18px] focus:ring-2 focus:ring-brand-gold/20 outline-none transition-all font-medium text-sm"
+                className="w-full px-5 py-3.5 bg-brand-linen/50 border-none rounded-[18px] focus:ring-2 focus:ring-brand-gold/20 outline-none transition-all font-bold text-sm"
                 value={formData.category}
                 onChange={(e) => setFormData({...formData, category: e.target.value as Category})}
               >
@@ -214,9 +234,18 @@ export const Inventory: React.FC = () => {
               onChange={(e) => setFormData({...formData, size: e.target.value})}
             />
           </div>
+
+          <Input 
+            label="Warehouse Area / Location" 
+            placeholder="e.g. Aisle 4, Upper Rack 2" 
+            icon={<MapPin size={18} />}
+            value={formData.warehouseArea}
+            onChange={(e) => setFormData({...formData, warehouseArea: e.target.value})}
+          />
+
           <div className="grid grid-cols-2 gap-3 md:gap-4">
             <Input 
-              label={`Unit Cost`}
+              label={`Unit Cost Base`}
               type="number" 
               step="0.01" 
               required 
@@ -224,7 +253,7 @@ export const Inventory: React.FC = () => {
               onChange={(e) => setFormData({...formData, costPrice: e.target.value})}
             />
             <Input 
-              label={`Market Price`}
+              label={`Market Value`}
               type="number" 
               step="0.01" 
               required 
@@ -233,28 +262,28 @@ export const Inventory: React.FC = () => {
             />
           </div>
           <Input 
-            label="Current Inventory" 
+            label="Current Inventory Stock" 
             type="number" 
             required 
             value={formData.stockQuantity}
             onChange={(e) => setFormData({...formData, stockQuantity: e.target.value})}
           />
           <div className="flex gap-3 md:gap-4 pt-4">
-            <Button variant="outline" className="flex-1" type="button" onClick={() => setIsModalOpen(false)}>Abort</Button>
-            <Button className="flex-1" type="submit">{editingProduct ? "Update Intel" : "Deploy Product"}</Button>
+            <Button variant="outline" className="flex-1" type="button" onClick={() => setIsModalOpen(false)}>Abort Record</Button>
+            <Button className="flex-1" type="submit">{editingProduct ? "Update Intelligence" : "Establish Product"}</Button>
           </div>
         </form>
       </Modal>
 
       {confirmDelete && (
-        <Modal isOpen={!!confirmDelete} onClose={() => setConfirmDelete(null)} title="Destructive Action">
+        <Modal isOpen={!!confirmDelete} onClose={() => setConfirmDelete(null)} title="Destructive Protocol">
           <div className="text-center p-2 md:p-4">
             <div className="w-12 h-12 md:w-16 md:h-16 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-6">
               <Trash2 size={24} md:size={32} />
             </div>
-            <p className="text-slate-600 font-medium mb-8 text-sm md:text-base">This action will permanently purge this product from the registry. This cannot be undone.</p>
+            <p className="text-slate-600 font-bold mb-8 text-sm md:text-base leading-relaxed">This action will permanently purge this strategic asset from the global registry. This operation cannot be reversed.</p>
             <div className="flex gap-3 md:gap-4">
-              <Button variant="outline" className="flex-1" onClick={() => setConfirmDelete(null)}>Keep</Button>
+              <Button variant="outline" className="flex-1" onClick={() => setConfirmDelete(null)}>Retain Asset</Button>
               <Button variant="danger" className="flex-1" onClick={() => handleDelete(confirmDelete)}>Execute Purge</Button>
             </div>
           </div>
