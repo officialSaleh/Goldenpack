@@ -1,12 +1,19 @@
 
-import React, { useState, useEffect } from 'react';
-import { Users, Search, Plus, Phone, Briefcase, ChevronRight, History, CreditCard, Wallet, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Users, Search, Plus, Phone, Briefcase, ChevronRight, History, CreditCard, Wallet, CheckCircle2, Loader2, AlertCircle, ChevronDown } from 'lucide-react';
 import { db } from '../services/mockData';
 import { Card, Button, Input, Modal, Badge } from '../components/UI';
 import { Customer } from '../types';
 
 export const Customers: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searching, setSearching] = useState(false);
+  const [lastVisible, setLastVisible] = useState<any>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -16,10 +23,6 @@ export const Customers: React.FC = () => {
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
 
-  // Real-time synchronization
-  const [, setTick] = useState(0);
-  useEffect(() => db.subscribe(() => setTick(t => t + 1)), []);
-
   const [formData, setFormData] = useState({
     name: '',
     businessName: '',
@@ -28,12 +31,53 @@ export const Customers: React.FC = () => {
     defaultCreditDays: '30'
   });
 
-  const filteredCustomers = db.getCustomers().filter(c => 
-    c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    c.businessName.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Cloud Fetch Logic
+  const fetchCustomers = useCallback(async (isInitial = true, search = '') => {
+    if (isInitial) {
+      setLoading(true);
+      setError(null);
+    } else {
+      setSearching(true);
+    }
 
-  const handleAddCustomer = (e: React.FormEvent) => {
+    try {
+      const result = await db.getCustomersCloud({
+        search: search,
+        lastDoc: isInitial ? null : lastVisible,
+        pageSize: 12
+      });
+
+      if (isInitial) {
+        setCustomers(result.customers);
+      } else {
+        setCustomers(prev => [...prev, ...result.customers]);
+      }
+
+      setLastVisible(result.lastVisible);
+      setHasMore(result.customers.length === 12);
+    } catch (err: any) {
+      console.error("Cloud Customer Error:", err);
+      setError("Cloud synchronization failed. Please check your network.");
+    } finally {
+      setLoading(false);
+      setSearching(false);
+    }
+  }, [lastVisible]);
+
+  // Initial Load
+  useEffect(() => {
+    fetchCustomers(true, searchTerm);
+  }, []);
+
+  // Debounced Search
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      fetchCustomers(true, searchTerm);
+    }, 600);
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchTerm]);
+
+  const handleAddCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
     const newCustomer = {
       id: Math.random().toString(36).substr(2, 9),
@@ -44,9 +88,14 @@ export const Customers: React.FC = () => {
       defaultCreditDays: parseInt(formData.defaultCreditDays),
       outstandingBalance: 0
     };
-    db.addCustomer(newCustomer);
-    setIsModalOpen(false);
-    setFormData({ name: '', businessName: '', phone: '', creditLimit: '', defaultCreditDays: '30' });
+    try {
+      await db.addCustomer(newCustomer);
+      setIsModalOpen(false);
+      setFormData({ name: '', businessName: '', phone: '', creditLimit: '', defaultCreditDays: '30' });
+      fetchCustomers(true, ''); // Refresh list
+    } catch (err: any) {
+      alert(err.message);
+    }
   };
 
   const handleOpenPayment = (customer: Customer) => {
@@ -75,6 +124,7 @@ export const Customers: React.FC = () => {
         setShowSuccess(false);
         setIsPaymentModalOpen(false);
         setSelectedCustomer(null);
+        fetchCustomers(true, searchTerm); // Refresh list
       }, 2000);
     } catch (err: any) {
       setPaymentError(err.message || "Payment failed.");
@@ -82,6 +132,21 @@ export const Customers: React.FC = () => {
       setIsProcessingPayment(false);
     }
   };
+
+  const SkeletonCard = () => (
+    <Card className="animate-pulse">
+      <div className="flex items-start justify-between mb-8">
+        <div className="w-16 h-16 rounded-2xl bg-slate-100"></div>
+        <div className="h-6 w-24 bg-slate-100 rounded-lg"></div>
+      </div>
+      <div className="h-6 bg-slate-100 rounded w-3/4 mb-4"></div>
+      <div className="space-y-2">
+        <div className="h-3 bg-slate-100 rounded w-1/2"></div>
+        <div className="h-3 bg-slate-100 rounded w-1/3"></div>
+      </div>
+      <div className="mt-10 h-32 bg-slate-50 rounded-3xl"></div>
+    </Card>
+  );
 
   const currencySymbol = db.getSettings()?.currencySymbol || '$';
 
@@ -99,77 +164,111 @@ export const Customers: React.FC = () => {
 
       <div className="relative">
         <Input 
-          icon={<Search size={20} />} 
-          placeholder="Search by name, business or phone..." 
+          icon={searching ? <Loader2 size={20} className="animate-spin text-brand-gold" /> : <Search size={20} />} 
+          placeholder="Cloud search by name, business or phone..." 
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
 
+      {error && (
+        <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-center space-x-3 text-rose-600">
+          <AlertCircle size={20} />
+          <span className="text-xs font-bold uppercase tracking-widest">{error}</span>
+          <button onClick={() => fetchCustomers(true, searchTerm)} className="underline font-black">Retry</button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {filteredCustomers.map(c => {
-          const isAtLimit = c.outstandingBalance >= c.creditLimit;
-          const status = isAtLimit ? 'Limit Exceeded' : c.outstandingBalance > 0 ? 'Active Credit' : 'Clear Ledger';
+        {loading ? (
+          Array(6).fill(0).map((_, i) => <SkeletonCard key={i} />)
+        ) : (
+          customers.map(c => {
+            const isAtLimit = c.outstandingBalance >= c.creditLimit;
+            const status = isAtLimit ? 'Limit Exceeded' : c.outstandingBalance > 0 ? 'Active Credit' : 'Clear Ledger';
 
-          return (
-            <Card key={c.id} className="group hover:border-brand-gold transition-all duration-300 transform hover:-translate-y-1">
-              <div className="flex items-start justify-between mb-8">
-                <div className="w-16 h-16 rounded-2xl bg-brand-linen flex items-center justify-center text-brand-dark font-black text-2xl shadow-inner group-hover:bg-brand-gold transition-colors">
-                  {c.name.charAt(0)}
+            return (
+              <Card key={c.id} className="group hover:border-brand-gold transition-all duration-300 transform hover:-translate-y-1">
+                <div className="flex items-start justify-between mb-8">
+                  <div className="w-16 h-16 rounded-2xl bg-brand-linen flex items-center justify-center text-brand-dark font-black text-2xl shadow-inner group-hover:bg-brand-gold transition-colors">
+                    {c.name.charAt(0)}
+                  </div>
+                  <Badge color={isAtLimit ? 'rose' : c.outstandingBalance > 0 ? 'amber' : 'emerald'}>
+                    {status}
+                  </Badge>
                 </div>
-                <Badge color={isAtLimit ? 'rose' : c.outstandingBalance > 0 ? 'amber' : 'emerald'}>
-                  {status}
-                </Badge>
-              </div>
-              
-              <h3 className="text-xl font-black text-brand-dark tracking-tight">{c.name}</h3>
-              <div className="space-y-1.5 mt-2">
-                <div className="flex items-center text-slate-500 text-sm space-x-2 font-bold uppercase tracking-widest text-[10px]">
-                  <Briefcase size={12} className="text-brand-gold" />
-                  <span>{c.businessName}</span>
+                
+                <h3 className="text-xl font-black text-brand-dark tracking-tight">{c.name}</h3>
+                <div className="space-y-1.5 mt-2">
+                  <div className="flex items-center text-slate-500 text-sm space-x-2 font-bold uppercase tracking-widest text-[10px]">
+                    <Briefcase size={12} className="text-brand-gold" />
+                    <span>{c.businessName}</span>
+                  </div>
+                  <div className="flex items-center text-slate-500 text-sm space-x-2 font-bold uppercase tracking-widest text-[10px]">
+                    <Phone size={12} className="text-brand-gold" />
+                    <span>{c.phone}</span>
+                  </div>
                 </div>
-                <div className="flex items-center text-slate-500 text-sm space-x-2 font-bold uppercase tracking-widest text-[10px]">
-                  <Phone size={12} className="text-brand-gold" />
-                  <span>{c.phone}</span>
-                </div>
-              </div>
 
-              <div className="mt-10 p-5 bg-brand-linen/30 rounded-3xl border border-brand-linen/50">
-                <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
-                  <span>Usage Analytics</span>
-                  <span>Cap: {db.formatMoney(c.creditLimit)}</span>
+                <div className="mt-10 p-5 bg-brand-linen/30 rounded-3xl border border-brand-linen/50">
+                  <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+                    <span>Usage Analytics</span>
+                    <span>Cap: {db.formatMoney(c.creditLimit)}</span>
+                  </div>
+                  <div className="flex justify-between items-baseline">
+                    <span className={`text-2xl font-black tracking-tighter ${c.outstandingBalance > 0 ? (isAtLimit ? 'text-rose-600' : 'text-brand-gold') : 'text-emerald-600'}`}>
+                      {db.formatMoney(c.outstandingBalance)}
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-200 h-2 rounded-full mt-4 overflow-hidden shadow-inner">
+                    <div 
+                      className={`h-full rounded-full transition-all duration-700 ease-out ${isAtLimit ? 'bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.5)]' : 'bg-brand-gold'}`} 
+                      style={{ width: `${Math.min(100, (c.outstandingBalance / c.creditLimit) * 100)}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="flex justify-between items-baseline">
-                  <span className={`text-2xl font-black tracking-tighter ${c.outstandingBalance > 0 ? (isAtLimit ? 'text-rose-600' : 'text-brand-gold') : 'text-emerald-600'}`}>
-                    {db.formatMoney(c.outstandingBalance)}
-                  </span>
-                </div>
-                <div className="w-full bg-slate-200 h-2 rounded-full mt-4 overflow-hidden shadow-inner">
-                  <div 
-                    className={`h-full rounded-full transition-all duration-700 ease-out ${isAtLimit ? 'bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.5)]' : 'bg-brand-gold'}`} 
-                    style={{ width: `${Math.min(100, (c.outstandingBalance / c.creditLimit) * 100)}%` }}
-                  />
-                </div>
-              </div>
 
-              <div className="flex gap-3 mt-8">
-                {c.outstandingBalance > 0 ? (
-                  <Button 
-                    className="flex-1" 
-                    icon={<Wallet size={16} />} 
-                    onClick={() => handleOpenPayment(c)}
-                  >
-                    Settle
-                  </Button>
-                ) : (
-                  <Button variant="outline" className="flex-1" icon={<History size={16} />}>History</Button>
-                )}
-                <Button variant="secondary" className="px-5 rounded-2xl" icon={<ChevronRight size={20} />} />
-              </div>
-            </Card>
-          );
-        })}
+                <div className="flex gap-3 mt-8">
+                  {c.outstandingBalance > 0 ? (
+                    <Button 
+                      className="flex-1" 
+                      icon={<Wallet size={16} />} 
+                      onClick={() => handleOpenPayment(c)}
+                    >
+                      Settle
+                    </Button>
+                  ) : (
+                    <Button variant="outline" className="flex-1" icon={<History size={16} />}>History</Button>
+                  )}
+                  <Button variant="secondary" className="px-5 rounded-2xl" icon={<ChevronRight size={20} />} />
+                </div>
+              </Card>
+            );
+          })
+        )}
       </div>
+
+      {!loading && customers.length === 0 && (
+        <div className="py-40 text-center opacity-30 border-4 border-dashed border-brand-linen rounded-[64px]">
+          <Users size={80} className="mx-auto mb-6 text-slate-200" />
+          <p className="font-black uppercase tracking-[0.4em] text-sm italic">
+            {searchTerm ? 'No matches in cloud registry' : 'No clients synchronized'}
+          </p>
+        </div>
+      )}
+
+      {hasMore && !loading && (
+        <div className="flex justify-center pt-8 pb-12">
+          <Button 
+            variant="outline" 
+            icon={searching ? <Loader2 size={18} className="animate-spin" /> : <ChevronDown size={18} />} 
+            onClick={() => fetchCustomers(false, searchTerm)}
+            disabled={searching}
+          >
+            {searching ? 'Querying Cloud...' : 'Load More Entities'}
+          </Button>
+        </div>
+      )}
 
       {/* Registration Modal */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Register Enterprise Entity">

@@ -23,7 +23,12 @@ import {
   orderBy,
   Unsubscribe,
   runTransaction,
-  DocumentSnapshot
+  DocumentSnapshot,
+  limit,
+  startAfter,
+  getDocs,
+  where,
+  QueryConstraint
 } from 'firebase/firestore';
 
 const STORAGE_KEY = 'perfumepack_pro_v2';
@@ -98,8 +103,9 @@ class DB {
       })
     );
 
+    // Keep limited local sync for POS dropdowns/stats
     this.unsubscribers.push(
-      onSnapshot(collection(db_firestore, "customers"), (snapshot) => {
+      onSnapshot(query(collection(db_firestore, "customers"), limit(50)), (snapshot) => {
         this.customers = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Customer));
         this.notify();
         this.saveLocal();
@@ -107,7 +113,7 @@ class DB {
     );
 
     this.unsubscribers.push(
-      onSnapshot(query(collection(db_firestore, "orders"), orderBy("date", "desc")), (snapshot) => {
+      onSnapshot(query(collection(db_firestore, "orders"), orderBy("date", "desc"), limit(50)), (snapshot) => {
         this.orders = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Order));
         this.notify();
         this.saveLocal();
@@ -122,7 +128,6 @@ class DB {
       })
     );
 
-    // CRITICAL: Added missing containers listener
     this.unsubscribers.push(
       onSnapshot(collection(db_firestore, "containers"), (snapshot) => {
         this.containers = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Container));
@@ -130,6 +135,72 @@ class DB {
         this.saveLocal();
       })
     );
+  }
+
+  /**
+   * Cloud Fetch for Customers
+   */
+  async getCustomersCloud(options: { 
+    search?: string, 
+    lastDoc?: any, 
+    pageSize?: number 
+  }) {
+    const { search, lastDoc, pageSize = 12 } = options;
+    const constraints: QueryConstraint[] = [orderBy("name", "asc"), limit(pageSize)];
+    
+    if (lastDoc) {
+      constraints.push(startAfter(lastDoc));
+    }
+
+    const q = query(collection(db_firestore, "customers"), ...constraints);
+    const snapshot = await getDocs(q);
+    
+    let customers = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Customer));
+    
+    if (search) {
+      const lowerSearch = search.toLowerCase();
+      customers = customers.filter(c => 
+        c.name.toLowerCase().includes(lowerSearch) || 
+        c.businessName.toLowerCase().includes(lowerSearch) ||
+        c.phone.includes(lowerSearch)
+      );
+    }
+
+    return {
+      customers,
+      lastVisible: snapshot.docs[snapshot.docs.length - 1]
+    };
+  }
+
+  async getOrdersCloud(options: { 
+    search?: string, 
+    lastDoc?: any, 
+    pageSize?: number 
+  }) {
+    const { search, lastDoc, pageSize = 15 } = options;
+    const constraints: QueryConstraint[] = [orderBy("date", "desc"), limit(pageSize)];
+    
+    if (lastDoc) {
+      constraints.push(startAfter(lastDoc));
+    }
+
+    const q = query(collection(db_firestore, "orders"), ...constraints);
+    const snapshot = await getDocs(q);
+    
+    let orders = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Order));
+    
+    if (search) {
+      const lowerSearch = search.toLowerCase();
+      orders = orders.filter(o => 
+        o.id.toLowerCase().includes(lowerSearch) || 
+        o.customerName.toLowerCase().includes(lowerSearch)
+      );
+    }
+
+    return {
+      orders,
+      lastVisible: snapshot.docs[snapshot.docs.length - 1]
+    };
   }
 
   stopSync() {
