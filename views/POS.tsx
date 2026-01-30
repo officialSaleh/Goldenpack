@@ -21,11 +21,26 @@ export const POS: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Real-time UI refresh trigger
   const [, setTick] = useState(0);
   useEffect(() => db.subscribe(() => setTick(t => t + 1)), []);
 
   const products = db.getProducts();
   const customers = db.getCustomers();
+
+  // FIX: Real-time Reconciliation Logic
+  // Automatically purges items from the cart that no longer exist in the database registry
+  useEffect(() => {
+    if (cart.length === 0 || products.length === 0) return;
+    
+    const validProductIds = new Set(products.map(p => p.id));
+    const cleanedCart = cart.filter(item => validProductIds.has(item.productId));
+    
+    if (cleanedCart.length !== cart.length) {
+      setCart(cleanedCart);
+      setErrorMsg("Operational Sync: Some items were removed from the cart as they no longer exist in the registry.");
+    }
+  }, [products]);
 
   const filteredProducts = useMemo(() => 
     products.filter(p => {
@@ -58,7 +73,6 @@ export const POS: React.FC = () => {
         let newQty = absoluteValue !== undefined ? absoluteValue : item.quantity + delta;
         
         // Validation: Clamp between 0 and stock level. 
-        // Note: We do NOT filter the cart here so 0 stays in list.
         if (isNaN(newQty) || newQty < 0) newQty = 0;
         if (p && newQty > p.stockQuantity) newQty = p.stockQuantity;
         
@@ -76,11 +90,22 @@ export const POS: React.FC = () => {
 
   const handleCheckoutInitiate = () => {
     if (!selectedCustomer || cart.length === 0) return;
-    // Check if the actual billable quantity is greater than zero
-    if (cart.reduce((sum, item) => sum + item.quantity, 0) === 0) {
-        setErrorMsg("Operational Alert: Total order quantity is zero. Adjust counts to proceed.");
-        return;
+    
+    // Check if the total billable quantity is zero
+    const totalQty = cart.reduce((sum, item) => sum + item.quantity, 0);
+    if (totalQty === 0) {
+      setErrorMsg("Quantity Alert: Total order quantity is zero. Adjust counts to proceed.");
+      return;
     }
+
+    // Secondary validation: Ensure all products still exist before opening modal
+    const invalidItems = cart.filter(item => !products.find(p => p.id === item.productId));
+    if (invalidItems.length > 0) {
+      const ids = invalidItems.map(i => i.productName).join(', ');
+      setErrorMsg(`Registry Error: ${ids} no longer exist. Please refresh the floor.`);
+      return;
+    }
+
     setShowConfirmModal(true);
   };
 
@@ -88,7 +113,7 @@ export const POS: React.FC = () => {
     if (!selectedCustomer) return;
     setLoading(true);
     try {
-      // We filter items to only include those with quantity > 0 for the permanent order record
+      // Filter items to only include those with quantity > 0 for the permanent record
       const billableItems = cart.filter(i => i.quantity > 0);
       
       const order: Order = {
@@ -103,13 +128,20 @@ export const POS: React.FC = () => {
         dueDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
         amountPaid: paymentType === 'Cash' ? totals.total : 0,
       };
+
       await db.createOrder(order);
       setLastOrder(order);
       setCart([]);
       setSelectedCustomer(null);
       setIsCartOpen(false);
     } catch (err: any) {
-      setErrorMsg(err.message);
+      // Graceful error handling for the "reference not found" case
+      if (err.message.includes("not found in database")) {
+        setErrorMsg("Safety Protocol: An item was deleted from the registry during this session. The cart has been synchronized.");
+        // The reconciliation useEffect will naturally clean the cart on next tick
+      } else {
+        setErrorMsg(err.message);
+      }
     } finally {
       setLoading(false);
       setShowConfirmModal(false);
@@ -189,7 +221,6 @@ export const POS: React.FC = () => {
                       </span>
                     </div>
 
-                    {/* Warehouse Area Tag */}
                     {p.warehouseArea && (
                       <div className="flex items-center mt-1.5 text-[8px] font-black text-brand-gold uppercase tracking-widest">
                         <MapPin size={10} className="mr-1" />
@@ -197,7 +228,6 @@ export const POS: React.FC = () => {
                       </div>
                     )}
                     
-                    {/* Visual Stock Bar (Small) */}
                     <div className="hidden lg:block w-full h-1 bg-slate-100 rounded-full mt-3 overflow-hidden">
                       <div 
                         className={`h-full rounded-full ${isLowStock ? 'bg-rose-500' : 'bg-emerald-500'}`}
@@ -262,7 +292,6 @@ export const POS: React.FC = () => {
           </div>
 
           <div className="flex-1 overflow-y-auto p-8 space-y-6 scrollbar-hide">
-            {/* Customer Selection */}
             <div className="space-y-3">
               <label className="text-[9px] font-black text-brand-gold uppercase tracking-[0.3em] ml-1">Assign Customer Entity</label>
               <div className="relative group">
@@ -278,7 +307,6 @@ export const POS: React.FC = () => {
               </div>
             </div>
 
-            {/* Cart Items */}
             <div className="space-y-4 pt-4">
               <div className="flex justify-between items-center px-1">
                  <h4 className="text-[10px] font-black text-gray-600 uppercase tracking-widest">Inventory List ({cart.length})</h4>
@@ -357,7 +385,6 @@ export const POS: React.FC = () => {
         </div>
       </div>
 
-      {/* Mobile Dynamic Summary Bar */}
       {cart.length > 0 && !isCartOpen && (
         <div className="lg:hidden fixed bottom-6 left-6 right-6 z-40 animate-in slide-in-from-bottom-20 duration-500">
           <button 
@@ -381,7 +408,6 @@ export const POS: React.FC = () => {
         </div>
       )}
 
-      {/* Checkout Confirmation Modal */}
       <Modal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} title="Operational Verification">
         <div className="space-y-8">
           <div className="bg-brand-bg p-8 rounded-[40px] border border-brand-linen flex flex-col items-center">
@@ -401,7 +427,6 @@ export const POS: React.FC = () => {
         </div>
       </Modal>
 
-      {/* Success Success Screen Overlay */}
       {lastOrder && (
         <div className="fixed inset-0 z-[200] bg-brand-dark/95 backdrop-blur-3xl flex items-center justify-center p-6 animate-in fade-in duration-500">
           <div className="bg-white max-w-sm w-full rounded-[64px] p-12 text-center shadow-[0_50px_100px_rgba(0,0,0,0.5)] animate-in zoom-in-95 duration-500">
@@ -418,7 +443,6 @@ export const POS: React.FC = () => {
         </div>
       )}
 
-      {/* Alert Messaging */}
       {errorMsg && (
         <div className="fixed top-24 lg:top-10 left-1/2 -translate-x-1/2 z-[200] bg-rose-600 text-white px-8 py-4 rounded-full shadow-2xl font-black uppercase tracking-widest text-[10px] flex items-center space-x-4 animate-in slide-in-from-top-10">
           <AlertCircle size={20} />
