@@ -103,7 +103,6 @@ class DB {
       })
     );
 
-    // Keep limited local sync for POS dropdowns/stats
     this.unsubscribers.push(
       onSnapshot(query(collection(db_firestore, "customers"), limit(50)), (snapshot) => {
         this.customers = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Customer));
@@ -137,9 +136,6 @@ class DB {
     );
   }
 
-  /**
-   * Cloud Fetch for Customers
-   */
   async getCustomersCloud(options: { 
     search?: string, 
     lastDoc?: any, 
@@ -201,6 +197,31 @@ class DB {
       orders,
       lastVisible: snapshot.docs[snapshot.docs.length - 1]
     };
+  }
+
+  /**
+   * STRESS TEST: Forces a complex compound query to trigger Index requirement.
+   */
+  async triggerComplexIndexQuery() {
+    const q = query(
+      collection(db_firestore, "orders"),
+      where("status", "==", "Paid"),
+      orderBy("total", "desc"),
+      limit(5)
+    );
+    // This will throw the "Magic Link" error in console if index is missing.
+    return await getDocs(q);
+  }
+
+  async bulkInjectSampleData() {
+    const sampleProducts: Product[] = [
+      { id: 'STRESS-1', name: 'Bulk Product A', category: 'Bottle', size: 100, costPrice: 5, sellingPrice: 15, stockQuantity: 1000 },
+      { id: 'STRESS-2', name: 'Bulk Product B', category: 'Spray', size: 50, costPrice: 2, sellingPrice: 8, stockQuantity: 500 },
+    ];
+    
+    for (const p of sampleProducts) {
+      await setDoc(doc(db_firestore, "products", p.id), p);
+    }
   }
 
   stopSync() {
