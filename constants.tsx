@@ -8,8 +8,7 @@ import {
   Clock,
   Wallet,
   BarChart3,
-  Truck,
-  Activity
+  Truck
 } from 'lucide-react';
 
 export const VAT_RATE = 0.05;
@@ -33,5 +32,4 @@ export const NAV_ITEMS = [
   { id: 'orders', label: 'Order History', icon: <Clock size={20} />, roles: ['admin', 'staff'] },
   { id: 'expenses', label: 'Expenses', icon: <Wallet size={20} />, roles: ['admin'] },
   { id: 'reports', label: 'Reports', icon: <BarChart3 size={20} />, roles: ['admin'] },
-  { id: 'diagnostics', label: 'Diagnostics', icon: <Activity size={20} />, roles: ['admin'] },
 ];
