@@ -121,6 +121,15 @@ class DB {
         this.saveLocal();
       })
     );
+
+    // CRITICAL: Added missing containers listener
+    this.unsubscribers.push(
+      onSnapshot(collection(db_firestore, "containers"), (snapshot) => {
+        this.containers = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Container));
+        this.notify();
+        this.saveLocal();
+      })
+    );
   }
 
   stopSync() {
@@ -224,7 +233,6 @@ class DB {
 
   async collectPayment(customerId: string, amount: number, method: string) {
     await runTransaction(db_firestore, async (transaction) => {
-      // 1. READ
       const customerRef = doc(db_firestore, "customers", customerId);
       const customerSnap = await transaction.get(customerRef);
 
@@ -235,10 +243,8 @@ class DB {
       const currentBalance = customerSnap.data()?.outstandingBalance || 0;
       const newBalance = currentBalance - amount;
 
-      // 2. WRITE
       transaction.update(customerRef, { outstandingBalance: newBalance });
 
-      // Create a payment record for audit
       const paymentId = `PAY-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
       const paymentRef = doc(db_firestore, "payments", paymentId);
       const paymentData = {
@@ -259,9 +265,25 @@ class DB {
     await setDoc(doc(db_firestore, "app", "settings"), s);
   }
 
-  async addCustomer(c: Customer) { await setDoc(doc(db_firestore, "customers", c.id), c); }
-  async addContainer(c: Container) { await setDoc(doc(db_firestore, "containers", c.id), c); }
-  async addExpense(e: Expense) { await setDoc(doc(db_firestore, "expenses", e.id), e); }
+  async addCustomer(c: Customer) { 
+    await setDoc(doc(db_firestore, "customers", c.id), c); 
+    this.notify();
+  }
+
+  async addContainer(c: Container) { 
+    await setDoc(doc(db_firestore, "containers", c.id), c); 
+    this.notify();
+  }
+
+  async updateContainerStatus(id: string, status: Container['status']) {
+    await updateDoc(doc(db_firestore, "containers", id), { status });
+    this.notify();
+  }
+
+  async addExpense(e: Expense) { 
+    await setDoc(doc(db_firestore, "expenses", e.id), e); 
+    this.notify();
+  }
 
   getTrajectoryData() {
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -300,7 +322,7 @@ class DB {
       overdueCustomersCount: this.orders.filter(o => o.status !== 'Paid' && new Date(o.dueDate) < new Date()).length,
       lowStockAlerts: lowStock,
       totalInventoryValue: invValue,
-      netProfit: totalRevenue * 0.2 // Simplified for mock
+      netProfit: totalRevenue * 0.2 
     };
   }
 }
