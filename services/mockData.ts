@@ -366,24 +366,28 @@ class DB {
       // 1. Update Customer Balance
       transaction.update(customerRef, { outstandingBalance: newBalance });
 
-      // 2. FIFO Order Allocation Logic
-      // Fetch unpaid or partially paid orders for this customer, oldest first
+      // 2. FIFO Order Allocation Logic - Option 2 (In-Memory Workaround)
+      // Fetch ALL orders for this customer. We avoid filtered/sorted queries to bypass index requirements.
       const ordersQuery = query(
         collection(db_firestore, "orders"),
         where("userId", "==", this.currentUserId),
-        where("customerId", "==", customerId),
-        where("status", "!=", "Paid"),
-        orderBy("status"), // Note: Inequality field must be first in orderBy for Firestore, but we usually want oldest date. 
-        orderBy("date", "asc")
+        where("customerId", "==", customerId)
       );
       
       const ordersSnapshot = await getDocs(ordersQuery);
+      
+      // Filter out paid orders and sort by date ascending (oldest first) in memory
+      const unpaidOrders = ordersSnapshot.docs
+        .map(doc => ({ ref: doc.ref, data: doc.data() as Order }))
+        .filter(order => order.data.status !== 'Paid')
+        .sort((a, b) => a.data.date.localeCompare(b.data.date));
+
       let remainingPayment = amount;
 
-      for (const orderDoc of ordersSnapshot.docs) {
+      for (const order of unpaidOrders) {
         if (remainingPayment <= 0) break;
 
-        const orderData = orderDoc.data() as Order;
+        const orderData = order.data;
         const orderTotal = orderData.total;
         const orderPaid = orderData.amountPaid || 0;
         const orderRemaining = orderTotal - orderPaid;
@@ -393,7 +397,7 @@ class DB {
           const newOrderPaid = orderPaid + allocation;
           const isFullyPaid = newOrderPaid >= orderTotal;
 
-          transaction.update(orderDoc.ref, {
+          transaction.update(order.ref, {
             amountPaid: newOrderPaid,
             status: isFullyPaid ? 'Paid' : 'Pending'
           });
@@ -494,10 +498,9 @@ class DB {
     };
   }
 
-  // Fix: Implement missing diagnostics methods
+  // Diagnostics method remains standard to allow testing for index requirements in staging
   async triggerComplexIndexQuery() {
     if (!this.currentUserId) throw new Error("Unauthenticated");
-    // This query triggers an index requirement on production to verify rules/indexes
     const q = query(
       collection(db_firestore, "orders"),
       where("userId", "==", this.currentUserId),
@@ -509,7 +512,6 @@ class DB {
     await getDocs(q);
   }
 
-  // Fix: Implement missing diagnostics methods
   async bulkInjectSampleData() {
     if (!this.currentUserId) throw new Error("Unauthenticated");
     const samples: Product[] = [

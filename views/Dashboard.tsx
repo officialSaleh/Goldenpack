@@ -151,8 +151,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onViewAudit }) => {
             )}
           </div>
           <button 
-            onClick={onViewAudit}
-            className="w-full mt-8 py-4 bg-brand-linen/30 text-brand-dark rounded-xl font-black text-[8px] uppercase tracking-[0.2em] hover:bg-brand-gold transition-all flex items-center justify-center space-x-2"
+            onClick={() => onViewAudit?.()}
+            className="w-full mt-8 py-4 bg-brand-linen/30 text-brand-dark rounded-xl font-black text-[8px] uppercase tracking-[0.2em] hover:bg-brand-gold active:scale-[0.98] transition-all flex items-center justify-center space-x-2"
           >
             <span>Audit Records</span>
             <ChevronRight size={12} />
