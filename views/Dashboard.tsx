@@ -16,7 +16,11 @@ import {
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { db } from '../services/mockData';
 
-export const Dashboard: React.FC = () => {
+interface DashboardProps {
+  onViewAudit?: () => void;
+}
+
+export const Dashboard: React.FC<DashboardProps> = ({ onViewAudit }) => {
   const [viewMode, setViewMode] = useState<'live' | 'reports'>('live');
   
   // Real-time synchronization
@@ -146,7 +150,10 @@ export const Dashboard: React.FC = () => {
               </div>
             )}
           </div>
-          <button className="w-full mt-8 py-4 bg-brand-linen/30 text-brand-dark rounded-xl font-black text-[8px] uppercase tracking-[0.2em] hover:bg-brand-gold transition-all flex items-center justify-center space-x-2">
+          <button 
+            onClick={onViewAudit}
+            className="w-full mt-8 py-4 bg-brand-linen/30 text-brand-dark rounded-xl font-black text-[8px] uppercase tracking-[0.2em] hover:bg-brand-gold transition-all flex items-center justify-center space-x-2"
+          >
             <span>Audit Records</span>
             <ChevronRight size={12} />
           </button>

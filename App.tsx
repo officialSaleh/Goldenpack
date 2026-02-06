@@ -93,7 +93,7 @@ const App: React.FC = () => {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'dashboard':   return <Dashboard />;
+      case 'dashboard':   return <Dashboard onViewAudit={() => setActiveTab('orders')} />;
       case 'inventory':   return <Inventory />;
       case 'containers':  return <Containers />;
       case 'customers':   return <Customers onViewHistory={handleViewCustomerHistory} />;
@@ -107,7 +107,7 @@ const App: React.FC = () => {
       );
       case 'expenses':    return <Expenses />;
       case 'reports':     return <Reports />;
-      default:            return <Dashboard />;
+      default:            return <Dashboard onViewAudit={() => setActiveTab('orders')} />;
     }
   };
 
