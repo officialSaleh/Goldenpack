@@ -31,7 +31,7 @@ import {
   QueryConstraint
 } from 'firebase/firestore';
 
-const STORAGE_KEY = 'perfumepack_pro_v2';
+const STORAGE_KEY = 'perfumepack_pro_v3';
 
 class DB {
   products: Product[] = [];
@@ -43,6 +43,7 @@ class DB {
   private unsubscribers: Unsubscribe[] = [];
   private onSettingsChange: ((settings: AppSettings | null) => void) | null = null;
   private listeners: (() => void)[] = [];
+  private currentUserId: string | null = null;
 
   constructor() {
     this.loadLocal();
@@ -81,22 +82,32 @@ class DB {
     callback(this.settings);
   }
 
-  startSync() {
+  startSync(userId: string) {
     this.stopSync();
+    this.currentUserId = userId;
 
+    // User-specific Settings Sync
     this.unsubscribers.push(
-      onSnapshot(doc(db_firestore, "app", "settings"), (doc) => {
+      onSnapshot(doc(db_firestore, "users", userId, "config", "settings"), (doc) => {
         if (doc.exists()) {
           this.settings = doc.data() as AppSettings;
           if (this.onSettingsChange) this.onSettingsChange(this.settings);
           this.notify();
           this.saveLocal();
+        } else {
+          // New User case
+          this.settings = null;
+          if (this.onSettingsChange) this.onSettingsChange(null);
+          this.notify();
         }
       })
     );
 
+    // Filtered Collections Sync
+    const filterByOwner = where("userId", "==", userId);
+
     this.unsubscribers.push(
-      onSnapshot(collection(db_firestore, "products"), (snapshot) => {
+      onSnapshot(query(collection(db_firestore, "products"), filterByOwner), (snapshot) => {
         this.products = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Product));
         this.notify();
         this.saveLocal();
@@ -104,7 +115,7 @@ class DB {
     );
 
     this.unsubscribers.push(
-      onSnapshot(query(collection(db_firestore, "customers"), limit(50)), (snapshot) => {
+      onSnapshot(query(collection(db_firestore, "customers"), filterByOwner, limit(100)), (snapshot) => {
         this.customers = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Customer));
         this.notify();
         this.saveLocal();
@@ -112,7 +123,7 @@ class DB {
     );
 
     this.unsubscribers.push(
-      onSnapshot(query(collection(db_firestore, "orders"), orderBy("date", "desc"), limit(50)), (snapshot) => {
+      onSnapshot(query(collection(db_firestore, "orders"), filterByOwner, orderBy("date", "desc"), limit(100)), (snapshot) => {
         this.orders = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Order));
         this.notify();
         this.saveLocal();
@@ -120,7 +131,7 @@ class DB {
     );
 
     this.unsubscribers.push(
-      onSnapshot(collection(db_firestore, "expenses"), (snapshot) => {
+      onSnapshot(query(collection(db_firestore, "expenses"), filterByOwner), (snapshot) => {
         this.expenses = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Expense));
         this.notify();
         this.saveLocal();
@@ -128,7 +139,7 @@ class DB {
     );
 
     this.unsubscribers.push(
-      onSnapshot(collection(db_firestore, "containers"), (snapshot) => {
+      onSnapshot(query(collection(db_firestore, "containers"), filterByOwner), (snapshot) => {
         this.containers = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Container));
         this.notify();
         this.saveLocal();
@@ -141,8 +152,13 @@ class DB {
     lastDoc?: any, 
     pageSize?: number 
   }) {
+    if (!this.currentUserId) throw new Error("Unauthenticated request");
     const { search, lastDoc, pageSize = 12 } = options;
-    const constraints: QueryConstraint[] = [orderBy("name", "asc"), limit(pageSize)];
+    const constraints: QueryConstraint[] = [
+      where("userId", "==", this.currentUserId),
+      orderBy("name", "asc"), 
+      limit(pageSize)
+    ];
     
     if (lastDoc) {
       constraints.push(startAfter(lastDoc));
@@ -173,8 +189,13 @@ class DB {
     lastDoc?: any, 
     pageSize?: number 
   }) {
+    if (!this.currentUserId) throw new Error("Unauthenticated request");
     const { search, lastDoc, pageSize = 15 } = options;
-    const constraints: QueryConstraint[] = [orderBy("date", "desc"), limit(pageSize)];
+    const constraints: QueryConstraint[] = [
+      where("userId", "==", this.currentUserId),
+      orderBy("date", "desc"), 
+      limit(pageSize)
+    ];
     
     if (lastDoc) {
       constraints.push(startAfter(lastDoc));
@@ -199,34 +220,10 @@ class DB {
     };
   }
 
-  /**
-   * STRESS TEST: Forces a complex compound query to trigger Index requirement.
-   */
-  async triggerComplexIndexQuery() {
-    const q = query(
-      collection(db_firestore, "orders"),
-      where("status", "==", "Paid"),
-      orderBy("total", "desc"),
-      limit(5)
-    );
-    // This will throw the "Magic Link" error in console if index is missing.
-    return await getDocs(q);
-  }
-
-  async bulkInjectSampleData() {
-    const sampleProducts: Product[] = [
-      { id: 'STRESS-1', name: 'Bulk Product A', category: 'Bottle', size: 100, costPrice: 5, sellingPrice: 15, stockQuantity: 1000 },
-      { id: 'STRESS-2', name: 'Bulk Product B', category: 'Spray', size: 50, costPrice: 2, sellingPrice: 8, stockQuantity: 500 },
-    ];
-    
-    for (const p of sampleProducts) {
-      await setDoc(doc(db_firestore, "products", p.id), p);
-    }
-  }
-
   stopSync() {
     this.unsubscribers.forEach(unsub => unsub());
     this.unsubscribers = [];
+    this.currentUserId = null;
   }
 
   saveLocal() {
@@ -254,7 +251,8 @@ class DB {
   getContainers() { return this.containers; }
 
   async addProduct(p: Product) { 
-    await setDoc(doc(db_firestore, "products", p.id), p);
+    if (!this.currentUserId) throw new Error("Unauthorized");
+    await setDoc(doc(db_firestore, "products", p.id), { ...p, userId: this.currentUserId });
   }
 
   async updateProduct(id: string, updates: Partial<Product>) {
@@ -266,6 +264,7 @@ class DB {
   }
 
   async createOrder(order: Order) {
+    if (!this.currentUserId) throw new Error("Unauthorized");
     await runTransaction(db_firestore, async (transaction) => {
       const uniqueProductIds = Array.from(new Set(order.items.map(item => item.productId)));
       const productSnapshots = new Map<string, DocumentSnapshot>();
@@ -317,13 +316,14 @@ class DB {
       }
 
       const orderRef = doc(db_firestore, "orders", order.id);
-      transaction.set(orderRef, order);
+      transaction.set(orderRef, { ...order, userId: this.currentUserId });
     });
 
     this.notify();
   }
 
   async collectPayment(customerId: string, amount: number, method: string) {
+    if (!this.currentUserId) throw new Error("Unauthorized");
     await runTransaction(db_firestore, async (transaction) => {
       const customerRef = doc(db_firestore, "customers", customerId);
       const customerSnap = await transaction.get(customerRef);
@@ -339,14 +339,15 @@ class DB {
 
       const paymentId = `PAY-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
       const paymentRef = doc(db_firestore, "payments", paymentId);
-      const paymentData = {
+      const paymentData: Payment = {
         id: paymentId,
         customerId,
         amount,
         date: new Date().toISOString().split('T')[0],
         method,
         previousBalance: currentBalance,
-        newBalance
+        newBalance,
+        userId: this.currentUserId!
       };
       transaction.set(paymentRef, paymentData);
     });
@@ -354,16 +355,19 @@ class DB {
   }
 
   async updateSettings(s: AppSettings) {
-    await setDoc(doc(db_firestore, "app", "settings"), s);
+    if (!this.currentUserId) throw new Error("Unauthorized");
+    await setDoc(doc(db_firestore, "users", this.currentUserId, "config", "settings"), { ...s, userId: this.currentUserId });
   }
 
   async addCustomer(c: Customer) { 
-    await setDoc(doc(db_firestore, "customers", c.id), c); 
+    if (!this.currentUserId) throw new Error("Unauthorized");
+    await setDoc(doc(db_firestore, "customers", c.id), { ...c, userId: this.currentUserId }); 
     this.notify();
   }
 
   async addContainer(c: Container) { 
-    await setDoc(doc(db_firestore, "containers", c.id), c); 
+    if (!this.currentUserId) throw new Error("Unauthorized");
+    await setDoc(doc(db_firestore, "containers", c.id), { ...c, userId: this.currentUserId }); 
     this.notify();
   }
 
@@ -373,7 +377,8 @@ class DB {
   }
 
   async addExpense(e: Expense) { 
-    await setDoc(doc(db_firestore, "expenses", e.id), e); 
+    if (!this.currentUserId) throw new Error("Unauthorized");
+    await setDoc(doc(db_firestore, "expenses", e.id), { ...e, userId: this.currentUserId }); 
     this.notify();
   }
 
@@ -416,6 +421,44 @@ class DB {
       totalInventoryValue: invValue,
       netProfit: totalRevenue * 0.2 
     };
+  }
+
+  // Fix: Adding triggerComplexIndexQuery for system diagnostics
+  async triggerComplexIndexQuery() {
+    if (!this.currentUserId) throw new Error("Unauthenticated request");
+    // This query uses multiple field ordering, typically requiring a composite index in production
+    const q = query(
+      collection(db_firestore, "orders"),
+      where("userId", "==", this.currentUserId),
+      where("total", ">", 0),
+      orderBy("total", "desc"),
+      orderBy("date", "desc"),
+      limit(1)
+    );
+    await getDocs(q);
+  }
+
+  // Fix: Adding bulkInjectSampleData for testing data volume
+  async bulkInjectSampleData() {
+    if (!this.currentUserId) throw new Error("Unauthenticated request");
+    const sampleProducts: Product[] = [
+      { id: `p-sample-1-${Date.now()}`, name: 'Royal Gold Bottle', category: 'Bottle', size: 100, costPrice: 2.5, sellingPrice: 6.5, stockQuantity: 250, warehouseArea: 'Aisle 1', userId: this.currentUserId },
+      { id: `p-sample-2-${Date.now()}`, name: 'Elite Mist Spray', category: 'Spray', size: 30, costPrice: 1.2, sellingPrice: 3.8, stockQuantity: 400, warehouseArea: 'Aisle 4', userId: this.currentUserId },
+      { id: `p-sample-3-${Date.now()}`, name: 'Velvet Cap Black', category: 'Cap', size: 0, costPrice: 0.4, sellingPrice: 1.2, stockQuantity: 1500, warehouseArea: 'Aisle 2', userId: this.currentUserId }
+    ];
+
+    const sampleCustomers: Customer[] = [
+      { id: `c-sample-1-${Date.now()}`, name: 'Hassan Bin Zayed', businessName: 'Gulf Fragrances', phone: '+971 4 555 1234', defaultCreditDays: 30, creditLimit: 10000, outstandingBalance: 0, userId: this.currentUserId },
+      { id: `c-sample-2-${Date.now()}`, name: 'Linda K.', businessName: 'Parisian Boutique', phone: '+33 1 2345 6789', defaultCreditDays: 45, creditLimit: 5000, outstandingBalance: 0, userId: this.currentUserId }
+    ];
+
+    const promises = [
+      ...sampleProducts.map(p => setDoc(doc(db_firestore, "products", p.id), p)),
+      ...sampleCustomers.map(c => setDoc(doc(db_firestore, "customers", c.id), c))
+    ];
+
+    await Promise.all(promises);
+    this.notify();
   }
 }
 

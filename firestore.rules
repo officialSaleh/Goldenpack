@@ -1,0 +1,21 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Generic rule for all core collections:
+    // Products, Customers, Orders, Expenses, Containers, Payments
+    // Ensures a user can only interact with documents where "userId" matches their UID.
+    match /{collectionName}/{docId} {
+      allow read, write: if request.auth != null && 
+        (resource == null || resource.data.userId == request.auth.uid) &&
+        (request.resource == null || request.resource.data.userId == request.auth.uid);
+    }
+    
+    // Isolated settings rule:
+    // Each user has a private config path at /users/{userId}/config/settings
+    match /users/{userId}/config/settings {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

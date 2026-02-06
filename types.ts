@@ -12,6 +12,7 @@ export interface AppSettings {
   currency: string;
   currencySymbol: string;
   setupComplete: boolean;
+  userId?: string;
 }
 
 export type Category = 'Bottle' | 'Spray' | 'Cap';
@@ -26,6 +27,7 @@ export interface Product {
   stockQuantity: number;
   warehouseArea?: string;
   imageUrl?: string;
+  userId?: string;
 }
 
 export interface Customer {
@@ -36,6 +38,7 @@ export interface Customer {
   defaultCreditDays: number;
   creditLimit: number;
   outstandingBalance: number;
+  userId?: string;
 }
 
 export type OrderStatus = 'Pending' | 'Delivered' | 'Paid' | 'Overdue';
@@ -61,14 +64,19 @@ export interface Order {
   status: OrderStatus;
   dueDate: string;
   amountPaid: number;
+  userId?: string;
 }
 
 export interface Payment {
   id: string;
-  orderId: string;
+  orderId?: string;
+  customerId: string;
   amount: number;
   date: string;
   method: string;
+  previousBalance?: number;
+  newBalance?: number;
+  userId?: string;
 }
 
 export type ExpenseCategory = 'Warehouse Rent' | 'Truck Fuel' | 'Salaries' | 'Telecommunication' | 'Other';
@@ -80,6 +88,7 @@ export interface Expense {
   amount: number;
   date: string;
   notes?: string;
+  userId?: string;
 }
 
 export interface Container {
@@ -90,6 +99,7 @@ export interface Container {
   itemCount: number;
   status: 'In Transit' | 'Arrived' | 'Unloaded';
   notes?: string;
+  userId?: string;
 }
 
 export interface DashboardStats {
