@@ -1,18 +1,32 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { db } from '../services/mockData';
-import { Clock, Search, FileX, Loader2, ChevronDown, AlertTriangle } from 'lucide-react';
+import { Clock, Search, FileX, Loader2, ChevronDown, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { Card, Badge, Input, Button } from '../components/UI';
 import { Order } from '../types';
 
-export const OrderHistory: React.FC = () => {
-  const [searchTerm, setSearchTerm] = useState('');
+interface OrderHistoryProps {
+  initialSearch?: string;
+  onSearchConsumed?: () => void;
+  onBack?: () => void;
+}
+
+export const OrderHistory: React.FC<OrderHistoryProps> = ({ initialSearch, onSearchConsumed, onBack }) => {
+  const [searchTerm, setSearchTerm] = useState(initialSearch || '');
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
   const [lastVisible, setLastVisible] = useState<any>(null);
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Handle external search injection
+  useEffect(() => {
+    if (initialSearch !== undefined && initialSearch !== searchTerm) {
+      setSearchTerm(initialSearch);
+      if (onSearchConsumed) onSearchConsumed();
+    }
+  }, [initialSearch]);
 
   // Phase A: Cloud Search Fetcher
   const fetchOrders = useCallback(async (isInitial = true, search = '') => {
@@ -56,7 +70,7 @@ export const OrderHistory: React.FC = () => {
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       fetchOrders(true, searchTerm);
-    }, 600); // 600ms debounce to save costs and reduce flickering
+    }, 600);
 
     return () => clearTimeout(delayDebounceFn);
   }, [searchTerm]);
@@ -72,12 +86,38 @@ export const OrderHistory: React.FC = () => {
     </tr>
   );
 
+  const getSmartStatus = (o: Order) => {
+    const paid = o.amountPaid || 0;
+    const total = o.total;
+    const remaining = total - paid;
+
+    if (paid >= total) return { label: 'Settled', color: 'emerald' as const };
+    if (paid > 0) return { label: 'Partial', color: 'amber' as const };
+    
+    // Check overdue
+    const isOverdue = new Date(o.dueDate) < new Date();
+    if (isOverdue) return { label: 'Overdue', color: 'rose' as const };
+    
+    return { label: o.paymentType === 'Credit' ? 'Unpaid' : 'Pending', color: 'indigo' as const };
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-black text-brand-dark tracking-tighter uppercase italic">Order <span className="text-brand-gold">History</span></h2>
-          <p className="text-slate-500 mt-1 font-bold uppercase tracking-widest text-[10px]">Cloud-synchronized transaction archives.</p>
+        <div className="flex items-center gap-4">
+          {onBack && (
+            <button 
+              onClick={onBack}
+              className="w-12 h-12 flex items-center justify-center bg-white border border-brand-linen rounded-2xl text-brand-dark hover:border-brand-gold hover:text-brand-gold transition-all shadow-sm active:scale-95"
+              title="Return to Ledger"
+            >
+              <ArrowLeft size={20} />
+            </button>
+          )}
+          <div>
+            <h2 className="text-3xl font-black text-brand-dark tracking-tighter uppercase italic">Order <span className="text-brand-gold">History</span></h2>
+            <p className="text-slate-500 mt-1 font-bold uppercase tracking-widest text-[10px]">Cloud-synchronized transaction archives.</p>
+          </div>
         </div>
       </div>
 
@@ -107,35 +147,56 @@ export const OrderHistory: React.FC = () => {
               <tr className="bg-slate-50/50 border-b border-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-400">
                 <th className="px-8 py-5">Order ID</th>
                 <th className="px-8 py-5">Customer</th>
-                <th className="px-8 py-5">Total</th>
-                <th className="px-8 py-5">Type</th>
+                <th className="px-8 py-5">Valuation</th>
+                <th className="px-8 py-5">Balance Status</th>
                 <th className="px-8 py-5">Due Date</th>
-                <th className="px-8 py-5">Status</th>
+                <th className="px-8 py-5">System State</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {loading ? (
                 Array(5).fill(0).map((_, i) => <SkeletonRow key={i} />)
               ) : (
-                orders.map((o) => (
-                  <tr key={o.id} className="hover:bg-slate-50 transition-colors group">
-                    <td className="px-8 py-5 font-bold text-slate-900 tracking-tight">{o.id}</td>
-                    <td className="px-8 py-5 font-medium text-slate-600">{o.customerName}</td>
-                    <td className="px-8 py-5 font-black text-brand-gold">{db.formatMoney(o.total)}</td>
-                    <td className="px-8 py-5">
-                      <Badge color={o.paymentType === 'Cash' ? 'emerald' : 'indigo'}>{o.paymentType}</Badge>
-                    </td>
-                    <td className="px-8 py-5 text-sm text-slate-500 font-medium">{o.dueDate}</td>
-                    <td className="px-8 py-5">
-                      <Badge color={
-                        o.status === 'Paid' ? 'emerald' : 
-                        o.status === 'Overdue' ? 'rose' : 'amber'
-                      }>
-                        {o.status}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))
+                orders.map((o) => {
+                  const statusInfo = getSmartStatus(o);
+                  const paidPct = Math.min(100, ((o.amountPaid || 0) / o.total) * 100);
+                  const balance = o.total - (o.amountPaid || 0);
+
+                  return (
+                    <tr key={o.id} className="hover:bg-slate-50 transition-colors group">
+                      <td className="px-8 py-5 font-bold text-slate-900 tracking-tight">{o.id}</td>
+                      <td className="px-8 py-5 font-medium text-slate-600">{o.customerName}</td>
+                      <td className="px-8 py-5">
+                        <p className="font-black text-brand-dark leading-none">{db.formatMoney(o.total)}</p>
+                        <p className="text-[8px] font-bold text-slate-400 mt-1 uppercase tracking-widest">{o.paymentType} Protocol</p>
+                      </td>
+                      <td className="px-8 py-5">
+                        <div className="flex flex-col w-32">
+                          <div className="flex justify-between items-center mb-1.5">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">
+                              {balance > 0 ? `Rem: ${db.formatMoney(balance)}` : 'Cleared'}
+                            </span>
+                            <span className="text-[8px] font-black text-brand-gold">{Math.round(paidPct)}%</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden shadow-inner">
+                            <div 
+                              className={`h-full rounded-full transition-all duration-1000 ${paidPct === 100 ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]' : 'bg-brand-gold'}`} 
+                              style={{ width: `${paidPct}%` }}
+                            />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-8 py-5">
+                        <span className={`text-[10px] font-bold uppercase tracking-widest ${new Date(o.dueDate) < new Date() && balance > 0 ? 'text-rose-500' : 'text-slate-500'}`}>
+                          {o.dueDate}
+                        </span>
+                      </td>
+                      <td className="px-8 py-5">
+                        <Badge color={statusInfo.color}>{statusInfo.label}</Badge>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

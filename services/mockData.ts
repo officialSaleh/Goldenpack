@@ -8,7 +8,8 @@ import {
   AppSettings,
   DashboardStats,
   Container,
-  Payment 
+  Payment,
+  Category
 } from '../types';
 import { db_firestore } from './firebase';
 import { 
@@ -220,6 +221,33 @@ class DB {
     };
   }
 
+  async getCustomerLedgerCloud(customerId: string) {
+    if (!this.currentUserId) throw new Error("Unauthenticated");
+
+    // Fetch orders for this customer
+    const qOrders = query(
+      collection(db_firestore, "orders"),
+      where("userId", "==", this.currentUserId),
+      where("customerId", "==", customerId),
+      orderBy("date", "desc")
+    );
+    const snapOrders = await getDocs(qOrders);
+    const orders = snapOrders.docs.map(d => ({ id: d.id, ...d.data(), type: 'Invoice' } as any));
+
+    // Fetch payments for this customer
+    const qPayments = query(
+      collection(db_firestore, "payments"),
+      where("userId", "==", this.currentUserId),
+      where("customerId", "==", customerId),
+      orderBy("date", "desc")
+    );
+    const snapPayments = await getDocs(qPayments);
+    const payments = snapPayments.docs.map(d => ({ id: d.id, ...d.data(), type: 'Payment' } as any));
+
+    // Combine and sort by date
+    return [...orders, ...payments].sort((a, b) => b.date.localeCompare(a.date));
+  }
+
   stopSync() {
     this.unsubscribers.forEach(unsub => unsub());
     this.unsubscribers = [];
@@ -333,10 +361,48 @@ class DB {
       }
 
       const currentBalance = customerSnap.data()?.outstandingBalance || 0;
-      const newBalance = currentBalance - amount;
+      const newBalance = Math.max(0, currentBalance - amount);
 
+      // 1. Update Customer Balance
       transaction.update(customerRef, { outstandingBalance: newBalance });
 
+      // 2. FIFO Order Allocation Logic
+      // Fetch unpaid or partially paid orders for this customer, oldest first
+      const ordersQuery = query(
+        collection(db_firestore, "orders"),
+        where("userId", "==", this.currentUserId),
+        where("customerId", "==", customerId),
+        where("status", "!=", "Paid"),
+        orderBy("status"), // Note: Inequality field must be first in orderBy for Firestore, but we usually want oldest date. 
+        orderBy("date", "asc")
+      );
+      
+      const ordersSnapshot = await getDocs(ordersQuery);
+      let remainingPayment = amount;
+
+      for (const orderDoc of ordersSnapshot.docs) {
+        if (remainingPayment <= 0) break;
+
+        const orderData = orderDoc.data() as Order;
+        const orderTotal = orderData.total;
+        const orderPaid = orderData.amountPaid || 0;
+        const orderRemaining = orderTotal - orderPaid;
+
+        if (orderRemaining > 0) {
+          const allocation = Math.min(remainingPayment, orderRemaining);
+          const newOrderPaid = orderPaid + allocation;
+          const isFullyPaid = newOrderPaid >= orderTotal;
+
+          transaction.update(orderDoc.ref, {
+            amountPaid: newOrderPaid,
+            status: isFullyPaid ? 'Paid' : 'Pending'
+          });
+
+          remainingPayment -= allocation;
+        }
+      }
+
+      // 3. Create Payment Record
       const paymentId = `PAY-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
       const paymentRef = doc(db_firestore, "payments", paymentId);
       const paymentData: Payment = {
@@ -362,6 +428,11 @@ class DB {
   async addCustomer(c: Customer) { 
     if (!this.currentUserId) throw new Error("Unauthorized");
     await setDoc(doc(db_firestore, "customers", c.id), { ...c, userId: this.currentUserId }); 
+    this.notify();
+  }
+
+  async updateCustomer(id: string, updates: Partial<Customer>) {
+    await updateDoc(doc(db_firestore, "customers", id), updates);
     this.notify();
   }
 
@@ -423,42 +494,31 @@ class DB {
     };
   }
 
-  // Fix: Adding triggerComplexIndexQuery for system diagnostics
+  // Fix: Implement missing diagnostics methods
   async triggerComplexIndexQuery() {
-    if (!this.currentUserId) throw new Error("Unauthenticated request");
-    // This query uses multiple field ordering, typically requiring a composite index in production
+    if (!this.currentUserId) throw new Error("Unauthenticated");
+    // This query triggers an index requirement on production to verify rules/indexes
     const q = query(
       collection(db_firestore, "orders"),
       where("userId", "==", this.currentUserId),
-      where("total", ">", 0),
-      orderBy("total", "desc"),
+      where("status", "!=", "Paid"),
+      orderBy("status"),
       orderBy("date", "desc"),
       limit(1)
     );
     await getDocs(q);
   }
 
-  // Fix: Adding bulkInjectSampleData for testing data volume
+  // Fix: Implement missing diagnostics methods
   async bulkInjectSampleData() {
-    if (!this.currentUserId) throw new Error("Unauthenticated request");
-    const sampleProducts: Product[] = [
-      { id: `p-sample-1-${Date.now()}`, name: 'Royal Gold Bottle', category: 'Bottle', size: 100, costPrice: 2.5, sellingPrice: 6.5, stockQuantity: 250, warehouseArea: 'Aisle 1', userId: this.currentUserId },
-      { id: `p-sample-2-${Date.now()}`, name: 'Elite Mist Spray', category: 'Spray', size: 30, costPrice: 1.2, sellingPrice: 3.8, stockQuantity: 400, warehouseArea: 'Aisle 4', userId: this.currentUserId },
-      { id: `p-sample-3-${Date.now()}`, name: 'Velvet Cap Black', category: 'Cap', size: 0, costPrice: 0.4, sellingPrice: 1.2, stockQuantity: 1500, warehouseArea: 'Aisle 2', userId: this.currentUserId }
+    if (!this.currentUserId) throw new Error("Unauthenticated");
+    const samples: Product[] = [
+      { id: 'p-bulk-1', name: 'Bulk Glass A', category: 'Bottle', size: 100, costPrice: 5, sellingPrice: 12, stockQuantity: 1000, userId: this.currentUserId },
+      { id: 'p-bulk-2', name: 'Bulk Spray B', category: 'Spray', size: 50, costPrice: 2, sellingPrice: 8, stockQuantity: 500, userId: this.currentUserId },
     ];
-
-    const sampleCustomers: Customer[] = [
-      { id: `c-sample-1-${Date.now()}`, name: 'Hassan Bin Zayed', businessName: 'Gulf Fragrances', phone: '+971 4 555 1234', defaultCreditDays: 30, creditLimit: 10000, outstandingBalance: 0, userId: this.currentUserId },
-      { id: `c-sample-2-${Date.now()}`, name: 'Linda K.', businessName: 'Parisian Boutique', phone: '+33 1 2345 6789', defaultCreditDays: 45, creditLimit: 5000, outstandingBalance: 0, userId: this.currentUserId }
-    ];
-
-    const promises = [
-      ...sampleProducts.map(p => setDoc(doc(db_firestore, "products", p.id), p)),
-      ...sampleCustomers.map(c => setDoc(doc(db_firestore, "customers", c.id), c))
-    ];
-
-    await Promise.all(promises);
-    this.notify();
+    for (const s of samples) {
+      await setDoc(doc(db_firestore, "products", s.id), s);
+    }
   }
 }
 

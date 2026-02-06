@@ -23,6 +23,9 @@ const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isRegistering, setIsRegistering] = useState(false);
+  
+  // State for cross-tab search injection
+  const [orderHistoryFilter, setOrderHistoryFilter] = useState('');
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
@@ -49,6 +52,11 @@ const App: React.FC = () => {
 
   const handleSetupComplete = () => {
     setSetupRequired(false);
+  };
+
+  const handleViewCustomerHistory = (customerName: string) => {
+    setOrderHistoryFilter(customerName);
+    setActiveTab('orders');
   };
 
   if (loading) {
@@ -88,9 +96,15 @@ const App: React.FC = () => {
       case 'dashboard':   return <Dashboard />;
       case 'inventory':   return <Inventory />;
       case 'containers':  return <Containers />;
-      case 'customers':   return <Customers />;
+      case 'customers':   return <Customers onViewHistory={handleViewCustomerHistory} />;
       case 'pos':         return <POS />;
-      case 'orders':      return <OrderHistory />;
+      case 'orders':      return (
+        <OrderHistory 
+          initialSearch={orderHistoryFilter} 
+          onSearchConsumed={() => setOrderHistoryFilter('')} 
+          onBack={orderHistoryFilter ? () => setActiveTab('customers') : undefined}
+        />
+      );
       case 'expenses':    return <Expenses />;
       case 'reports':     return <Reports />;
       default:            return <Dashboard />;
