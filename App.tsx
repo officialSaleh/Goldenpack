@@ -12,7 +12,6 @@ import { Setup } from './views/Setup';
 import { Login } from './views/Login';
 import { SignUp } from './views/SignUp';
 import { Containers } from './views/Containers';
-import { Diagnostics } from './views/Diagnostics';
 import { db } from './services/mockData';
 import { auth } from './services/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
@@ -94,7 +93,6 @@ const App: React.FC = () => {
       case 'orders':      return <OrderHistory />;
       case 'expenses':    return <Expenses />;
       case 'reports':     return <Reports />;
-      case 'diagnostics': return <Diagnostics />;
       default:            return <Dashboard />;
     }
   };
