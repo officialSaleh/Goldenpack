@@ -133,7 +133,9 @@ class DB {
 
     this.unsubscribers.push(
       onSnapshot(query(collection(db_firestore, "expenses"), filterByOwner), (snapshot) => {
-        this.expenses = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Expense));
+        this.expenses = snapshot.docs
+          .map(d => ({ id: d.id, ...d.data() } as Expense))
+          .sort((a, b) => b.date.localeCompare(a.date));
         this.notify();
         this.saveLocal();
       })
@@ -275,7 +277,7 @@ class DB {
   getProducts() { return this.products; }
   getCustomers() { return this.customers; }
   getOrders() { return this.orders; }
-  getExpenses() { return this.expenses; }
+  getExpenses() { return [...this.expenses].sort((a, b) => b.date.localeCompare(a.date)); }
   getContainers() { return this.containers; }
 
   async addProduct(p: Product) { 

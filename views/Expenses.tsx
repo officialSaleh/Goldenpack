@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from '../services/mockData';
 import { Wallet, Plus, DollarSign, Calendar } from 'lucide-react';
 import { Card, Button, Modal, Input } from '../components/UI';
@@ -8,6 +8,13 @@ import { ExpenseCategory } from '../types';
 export const Expenses: React.FC = () => {
   const [expenses, setExpenses] = useState(db.getExpenses());
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = db.subscribe(() => {
+      setExpenses(db.getExpenses());
+    });
+    return () => unsubscribe();
+  }, []);
   
   const [formData, setFormData] = useState({
     category: EXPENSE_CATEGORIES[0] as ExpenseCategory,
@@ -26,7 +33,6 @@ export const Expenses: React.FC = () => {
       notes: formData.notes
     };
     db.addExpense(newExpense);
-    setExpenses([...db.getExpenses()]);
     setIsModalOpen(false);
     setFormData({
       category: EXPENSE_CATEGORIES[0] as ExpenseCategory,
@@ -51,7 +57,7 @@ export const Expenses: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {expenses.map(e => (
+        {[...expenses].sort((a, b) => b.date.localeCompare(a.date)).map(e => (
           <Card key={e.id} className="flex items-center space-x-6">
             <div className="w-16 h-16 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center">
               <Wallet size={32} />

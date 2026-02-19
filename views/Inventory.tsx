@@ -199,7 +199,7 @@ export const Inventory: React.FC = () => {
           </table>
           {filteredProducts.length === 0 && (
             <div className="text-center py-16 md:py-24">
-              <Box className="mx-auto text-slate-100 mb-4" size={48} md:size={64} />
+              <Box className="mx-auto text-slate-100 mb-4" size={64} />
               <p className="text-slate-400 font-bold text-sm uppercase tracking-widest">Catalogue is currently empty</p>
             </div>
           )}
@@ -279,7 +279,7 @@ export const Inventory: React.FC = () => {
         <Modal isOpen={!!confirmDelete} onClose={() => setConfirmDelete(null)} title="Destructive Protocol">
           <div className="text-center p-2 md:p-4">
             <div className="w-12 h-12 md:w-16 md:h-16 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Trash2 size={24} md:size={32} />
+              <Trash2 size={32} />
             </div>
             <p className="text-slate-600 font-bold mb-8 text-sm md:text-base leading-relaxed">This action will permanently purge this strategic asset from the global registry. This operation cannot be reversed.</p>
             <div className="flex gap-3 md:gap-4">
