@@ -11,7 +11,8 @@ import {
   ShoppingCart,
   Wallet,
   Zap,
-  BarChart4
+  BarChart4,
+  Calendar
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { db } from '../services/mockData';
@@ -20,14 +21,33 @@ interface DashboardProps {
   onViewAudit?: () => void;
 }
 
+type Period = 'all' | 'this-month' | 'last-month';
+
 export const Dashboard: React.FC<DashboardProps> = ({ onViewAudit }) => {
   const [viewMode, setViewMode] = useState<'live' | 'reports'>('live');
+  const [period, setPeriod] = useState<Period>('all');
   
   // Real-time synchronization
   const [, setTick] = useState(0);
   useEffect(() => db.subscribe(() => setTick(t => t + 1)), []);
 
-  const stats = db.getDashboardStats();
+  const getPeriodRange = () => {
+    const now = new Date(); // Current time: 2026-02-18
+    if (period === 'this-month') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+      return { start, end };
+    }
+    if (period === 'last-month') {
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0];
+      const end = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0];
+      return { start, end };
+    }
+    return { start: undefined, end: undefined };
+  };
+
+  const { start, end } = getPeriodRange();
+  const stats = db.getDashboardStats(start, end);
   const chartData = db.getTrajectoryData();
 
   return (
@@ -38,22 +58,46 @@ export const Dashboard: React.FC<DashboardProps> = ({ onViewAudit }) => {
           <p className="text-gray-400 text-xs md:text-sm font-medium">Intel for {new Date().toLocaleDateString(undefined, {month: 'long', day: 'numeric'})}.</p>
         </div>
         
-        {/* VIEW TOGGLE */}
-        <div className="flex items-center space-x-1 bg-brand-linen/40 p-1.5 rounded-2xl border border-brand-linen self-start md:self-center">
-           <button 
-            onClick={() => setViewMode('live')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'live' ? 'bg-white shadow-sm text-brand-gold' : 'text-gray-400 hover:text-brand-dark'}`}
-           >
-             <Zap size={14} />
-             <span>Live View</span>
-           </button>
-           <button 
-            onClick={() => setViewMode('reports')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'reports' ? 'bg-white shadow-sm text-brand-gold' : 'text-gray-400 hover:text-brand-dark'}`}
-           >
-             <BarChart4 size={14} />
-             <span>Report View</span>
-           </button>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* PERIOD SELECTOR */}
+          <div className="flex items-center space-x-1 bg-white p-1 rounded-xl border border-brand-linen shadow-sm">
+            <button 
+              onClick={() => setPeriod('all')}
+              className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${period === 'all' ? 'bg-brand-dark text-white' : 'text-gray-400 hover:bg-brand-linen/30'}`}
+            >
+              All Time
+            </button>
+            <button 
+              onClick={() => setPeriod('this-month')}
+              className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${period === 'this-month' ? 'bg-brand-dark text-white' : 'text-gray-400 hover:bg-brand-linen/30'}`}
+            >
+              This Month
+            </button>
+            <button 
+              onClick={() => setPeriod('last-month')}
+              className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${period === 'last-month' ? 'bg-brand-dark text-white' : 'text-gray-400 hover:bg-brand-linen/30'}`}
+            >
+              Last Month
+            </button>
+          </div>
+
+          {/* VIEW TOGGLE */}
+          <div className="flex items-center space-x-1 bg-brand-linen/40 p-1.5 rounded-2xl border border-brand-linen">
+             <button 
+              onClick={() => setViewMode('live')}
+              className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'live' ? 'bg-white shadow-sm text-brand-gold' : 'text-gray-400 hover:text-brand-dark'}`}
+             >
+               <Zap size={14} />
+               <span>Live View</span>
+             </button>
+             <button 
+              onClick={() => setViewMode('reports')}
+              className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'reports' ? 'bg-white shadow-sm text-brand-gold' : 'text-gray-400 hover:text-brand-dark'}`}
+             >
+               <BarChart4 size={14} />
+               <span>Report View</span>
+             </button>
+          </div>
         </div>
       </div>
 

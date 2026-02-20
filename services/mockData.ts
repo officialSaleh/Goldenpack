@@ -352,6 +352,135 @@ class DB {
     this.notify();
   }
 
+  async markOrderAsPaid(orderId: string) {
+    if (!this.currentUserId) throw new Error("Unauthorized");
+    await runTransaction(db_firestore, async (transaction) => {
+      const orderRef = doc(db_firestore, "orders", orderId);
+      const orderSnap = await transaction.get(orderRef);
+      if (!orderSnap.exists()) throw new Error("Order not found");
+      const order = orderSnap.data() as Order;
+      if (order.status === 'Paid') return;
+
+      const remaining = order.total - (order.amountPaid || 0);
+      
+      if (order.paymentType === 'Credit') {
+        const customerRef = doc(db_firestore, "customers", order.customerId);
+        const customerSnap = await transaction.get(customerRef);
+        if (customerSnap.exists()) {
+          const currentBalance = customerSnap.data()?.outstandingBalance || 0;
+          transaction.update(customerRef, { outstandingBalance: Math.max(0, currentBalance - remaining) });
+        }
+      }
+
+      transaction.update(orderRef, { 
+        status: 'Paid', 
+        amountPaid: order.total 
+      });
+
+      const paymentId = `PAY-AUTO-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+      const paymentRef = doc(db_firestore, "payments", paymentId);
+      transaction.set(paymentRef, {
+        id: paymentId,
+        customerId: order.customerId,
+        amount: remaining,
+        date: new Date().toISOString().split('T')[0],
+        method: 'Manual Settlement',
+        orderId: order.id,
+        userId: this.currentUserId!
+      });
+    });
+    this.notify();
+  }
+
+  async updateOrder(orderId: string, updatedOrder: Order) {
+    if (!this.currentUserId) throw new Error("Unauthorized");
+    await runTransaction(db_firestore, async (transaction) => {
+      const orderRef = doc(db_firestore, "orders", orderId);
+      const orderSnap = await transaction.get(orderRef);
+      if (!orderSnap.exists()) throw new Error("Order not found");
+      const oldOrder = orderSnap.data() as Order;
+
+      // 1. Reverse old stock
+      for (const item of oldOrder.items) {
+        const productRef = doc(db_firestore, "products", item.productId);
+        const productSnap = await transaction.get(productRef);
+        if (productSnap.exists()) {
+          const currentStock = productSnap.data()?.stockQuantity || 0;
+          transaction.update(productRef, { stockQuantity: currentStock + item.quantity });
+        }
+      }
+
+      // 2. Reverse old customer balance
+      if (oldOrder.paymentType === 'Credit') {
+        const customerRef = doc(db_firestore, "customers", oldOrder.customerId);
+        const customerSnap = await transaction.get(customerRef);
+        if (customerSnap.exists()) {
+          const currentBalance = customerSnap.data()?.outstandingBalance || 0;
+          transaction.update(customerRef, { outstandingBalance: currentBalance - oldOrder.total });
+        }
+      }
+
+      // 3. Apply new stock (with check)
+      for (const item of updatedOrder.items) {
+        const productRef = doc(db_firestore, "products", item.productId);
+        const productSnap = await transaction.get(productRef);
+        if (!productSnap.exists()) throw new Error(`Product ${item.productName} not found`);
+        const currentStock = productSnap.data()?.stockQuantity || 0;
+        // Note: the stock was already increased by Step 1 in this transaction
+        transaction.update(productRef, { stockQuantity: currentStock - item.quantity });
+      }
+
+      // 4. Apply new customer balance
+      if (updatedOrder.paymentType === 'Credit') {
+        const customerRef = doc(db_firestore, "customers", updatedOrder.customerId);
+        const customerSnap = await transaction.get(customerRef);
+        if (customerSnap.exists()) {
+          const currentBalance = customerSnap.data()?.outstandingBalance || 0;
+          transaction.update(customerRef, { outstandingBalance: currentBalance + updatedOrder.total });
+        }
+      }
+
+      // 5. Update order
+      transaction.update(orderRef, { ...updatedOrder });
+    });
+    this.notify();
+  }
+
+  async deleteOrder(orderId: string) {
+    if (!this.currentUserId) throw new Error("Unauthorized");
+    await runTransaction(db_firestore, async (transaction) => {
+      const orderRef = doc(db_firestore, "orders", orderId);
+      const orderSnap = await transaction.get(orderRef);
+      if (!orderSnap.exists()) throw new Error("Order not found");
+      const order = orderSnap.data() as Order;
+
+      // 1. Reverse stock
+      for (const item of order.items) {
+        const productRef = doc(db_firestore, "products", item.productId);
+        const productSnap = await transaction.get(productRef);
+        if (productSnap.exists()) {
+          const currentStock = productSnap.data()?.stockQuantity || 0;
+          transaction.update(productRef, { stockQuantity: currentStock + item.quantity });
+        }
+      }
+
+      // 2. Reverse customer balance
+      if (order.paymentType === 'Credit') {
+        const customerRef = doc(db_firestore, "customers", order.customerId);
+        const customerSnap = await transaction.get(customerRef);
+        if (customerSnap.exists()) {
+          const currentBalance = customerSnap.data()?.outstandingBalance || 0;
+          const remaining = order.total - (order.amountPaid || 0);
+          transaction.update(customerRef, { outstandingBalance: Math.max(0, currentBalance - remaining) });
+        }
+      }
+
+      // 3. Delete order
+      transaction.delete(orderRef);
+    });
+    this.notify();
+  }
+
   async collectPayment(customerId: string, amount: number, method: string) {
     if (!this.currentUserId) throw new Error("Unauthorized");
     await runTransaction(db_firestore, async (transaction) => {
@@ -491,13 +620,24 @@ class DB {
     return Object.values(map).sort((a: any, b: any) => b.revenue - a.revenue).slice(0, 5) as any[];
   }
 
-  getDashboardStats(): DashboardStats {
+  getDashboardStats(startDate?: string, endDate?: string): DashboardStats {
     const today = new Date().toISOString().split('T')[0];
+    
+    let filteredOrders = this.orders;
+    let filteredExpenses = this.expenses;
+    
+    if (startDate && endDate) {
+      filteredOrders = this.orders.filter(o => o.date >= startDate && o.date <= endDate);
+      filteredExpenses = this.expenses.filter(e => e.date >= startDate && e.date <= endDate);
+    }
+
     const todaySales = this.orders.filter(o => o.date === today).reduce((s, o) => s + o.total, 0);
-    const totalRevenue = this.orders.reduce((s, o) => s + o.total, 0);
+    const totalRevenue = filteredOrders.reduce((s, o) => s + o.total, 0);
     const outstandingCredit = this.customers.reduce((s, c) => s + c.outstandingBalance, 0);
     const lowStock = this.products.filter(p => p.stockQuantity < 50).length;
     const invValue = this.products.reduce((s, p) => s + (p.costPrice * p.stockQuantity), 0);
+    
+    const totalExpenses = filteredExpenses.reduce((s, e) => s + e.amount, 0);
     
     return {
       todaySales,
@@ -506,7 +646,7 @@ class DB {
       overdueCustomersCount: this.orders.filter(o => o.status !== 'Paid' && new Date(o.dueDate) < new Date()).length,
       lowStockAlerts: lowStock,
       totalInventoryValue: invValue,
-      netProfit: totalRevenue * 0.2 
+      netProfit: totalRevenue - totalExpenses
     };
   }
 

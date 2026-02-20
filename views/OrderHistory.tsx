@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { db } from '../services/mockData';
-import { Clock, Search, FileX, Loader2, ChevronDown, AlertTriangle, ArrowLeft } from 'lucide-react';
-import { Card, Badge, Input, Button } from '../components/UI';
-import { Order } from '../types';
+import { Clock, Search, FileX, Loader2, ChevronDown, AlertTriangle, ArrowLeft, Edit2, Trash2, CheckCircle, X } from 'lucide-react';
+import { Card, Badge, Input, Button, Modal } from '../components/UI';
+import { Order, OrderItem, OrderStatus } from '../types';
 
 interface OrderHistoryProps {
   initialSearch?: string;
@@ -19,6 +19,9 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ initialSearch, onSea
   const [lastVisible, setLastVisible] = useState<any>(null);
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [processing, setProcessing] = useState(false);
 
   // Handle external search injection
   useEffect(() => {
@@ -101,6 +104,70 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ initialSearch, onSea
     return { label: o.paymentType === 'Credit' ? 'Unpaid' : 'Pending', color: 'indigo' as const };
   };
 
+  const handleMarkAsPaid = async (orderId: string) => {
+    if (!window.confirm("Mark this order as fully settled? This will update the customer balance.")) return;
+    setProcessing(true);
+    try {
+      await db.markOrderAsPaid(orderId);
+      await fetchOrders(true, searchTerm);
+    } catch (err) {
+      alert("Failed to update status");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleDeleteOrder = async (orderId: string) => {
+    setProcessing(true);
+    try {
+      await db.deleteOrder(orderId);
+      setConfirmDelete(null);
+      await fetchOrders(true, searchTerm);
+    } catch (err) {
+      alert("Failed to delete order");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleUpdateOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingOrder) return;
+    
+    setProcessing(true);
+    try {
+      // Recalculate totals
+      const subtotal = editingOrder.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      const vat = subtotal * 0.05;
+      const total = subtotal + vat;
+      
+      const updated: Order = {
+        ...editingOrder,
+        subtotal,
+        vat,
+        total,
+        // If it was paid, we might need to adjust status if total increased
+        status: ((editingOrder.amountPaid || 0) >= total ? 'Paid' : 'Pending') as OrderStatus
+      };
+
+      await db.updateOrder(editingOrder.id, updated);
+      setEditingOrder(null);
+      await fetchOrders(true, searchTerm);
+    } catch (err: any) {
+      alert(err.message || "Failed to update order");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const updateItemQuantity = (productId: string, newQty: number) => {
+    if (!editingOrder) return;
+    const newItems = editingOrder.items.map(item => 
+      item.productId === productId ? { ...item, quantity: Math.max(1, newQty) } : item
+    );
+    setEditingOrder({ ...editingOrder, items: newItems });
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -151,6 +218,7 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ initialSearch, onSea
                 <th className="px-8 py-5">Balance Status</th>
                 <th className="px-8 py-5">Due Date</th>
                 <th className="px-8 py-5">System State</th>
+                <th className="px-8 py-5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -194,6 +262,33 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ initialSearch, onSea
                       <td className="px-8 py-5">
                         <Badge color={statusInfo.color}>{statusInfo.label}</Badge>
                       </td>
+                      <td className="px-8 py-5 text-right">
+                        <div className="flex items-center justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {statusInfo.label !== 'Settled' && (
+                            <button 
+                              onClick={() => handleMarkAsPaid(o.id)}
+                              className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                              title="Mark as Paid"
+                            >
+                              <CheckCircle size={16} />
+                            </button>
+                          )}
+                          <button 
+                            onClick={() => setEditingOrder(o)}
+                            className="p-2 text-slate-400 hover:text-brand-gold hover:bg-brand-linen/30 rounded-lg transition-all"
+                            title="Edit Order"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                          <button 
+                            onClick={() => setConfirmDelete(o.id)}
+                            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                            title="Delete Order"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })
@@ -230,6 +325,82 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ initialSearch, onSea
           </div>
         )}
       </Card>
+
+      {/* Edit Order Modal */}
+      <Modal isOpen={!!editingOrder} onClose={() => setEditingOrder(null)} title="Modify Transaction Intelligence">
+        {editingOrder && (
+          <form onSubmit={handleUpdateOrder} className="space-y-6">
+            <div className="bg-brand-linen/30 p-6 rounded-3xl border border-brand-linen/50">
+              <div className="flex justify-between items-center mb-4">
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Customer Entity</span>
+                <span className="text-sm font-black text-brand-dark">{editingOrder.customerName}</span>
+              </div>
+              <div className="space-y-4">
+                {editingOrder.items.map((item) => (
+                  <div key={item.productId} className="flex items-center justify-between bg-white p-4 rounded-2xl border border-brand-linen/50 shadow-sm">
+                    <div className="flex-1">
+                      <p className="text-xs font-black text-brand-dark tracking-tight">{item.productName}</p>
+                      <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">{db.formatMoney(item.price)} / unit</p>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      <button 
+                        type="button"
+                        onClick={() => updateItemQuantity(item.productId, item.quantity - 1)}
+                        className="w-8 h-8 flex items-center justify-center bg-brand-linen/50 rounded-lg hover:bg-brand-gold transition-colors"
+                      >
+                        -
+                      </button>
+                      <span className="text-sm font-black w-8 text-center">{item.quantity}</span>
+                      <button 
+                        type="button"
+                        onClick={() => updateItemQuantity(item.productId, item.quantity + 1)}
+                        className="w-8 h-8 flex items-center justify-center bg-brand-linen/50 rounded-lg hover:bg-brand-gold transition-colors"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-4 border-t border-brand-linen">
+              <div className="flex justify-between text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                <span>New Valuation</span>
+                <span className="text-brand-dark font-black">{db.formatMoney(editingOrder.items.reduce((s, i) => s + (i.price * i.quantity), 0) * 1.05)}</span>
+              </div>
+            </div>
+
+            <div className="flex gap-4 pt-4">
+              <Button variant="outline" className="flex-1" type="button" onClick={() => setEditingOrder(null)}>Abort Edit</Button>
+              <Button className="flex-1" type="submit" disabled={processing}>
+                {processing ? <Loader2 className="animate-spin" size={18} /> : "Finalize Modification"}
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      {confirmDelete && (
+        <Modal isOpen={!!confirmDelete} onClose={() => setConfirmDelete(null)} title="Destructive Protocol">
+          <div className="text-center p-4">
+            <div className="w-16 h-16 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-6">
+              <AlertTriangle size={32} />
+            </div>
+            <p className="text-slate-600 font-bold mb-8 leading-relaxed">
+              This will permanently purge this transaction from the cloud ledger. 
+              Stock will be returned to inventory and customer balance will be adjusted.
+            </p>
+            <div className="flex gap-4">
+              <Button variant="outline" className="flex-1" onClick={() => setConfirmDelete(null)}>Retain Record</Button>
+              <Button variant="danger" className="flex-1" onClick={() => handleDeleteOrder(confirmDelete)} disabled={processing}>
+                {processing ? <Loader2 className="animate-spin" size={18} /> : "Execute Purge"}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

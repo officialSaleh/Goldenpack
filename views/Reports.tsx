@@ -1,22 +1,48 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   PieChart, Pie, Tooltip, ResponsiveContainer, Cell, Legend 
 } from 'recharts';
-import { Download, FileText, TrendingUp, DollarSign, PieChart as PieIcon, ArrowUpRight, Award, Printer } from 'lucide-react';
+import { Download, FileText, TrendingUp, DollarSign, PieChart as PieIcon, ArrowUpRight, Award, Printer, Calendar } from 'lucide-react';
 import { db } from '../services/mockData';
 import { Card, Badge, Button } from '../components/UI';
 
+type Period = 'all' | 'this-month' | 'last-month';
+
 export const Reports: React.FC = () => {
-  const stats = db.getDashboardStats();
+  const [period, setPeriod] = useState<Period>('all');
+  const [, setTick] = useState(0);
+  useEffect(() => db.subscribe(() => setTick(t => t + 1)), []);
+
+  const getPeriodRange = () => {
+    const now = new Date();
+    if (period === 'this-month') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+      return { start, end };
+    }
+    if (period === 'last-month') {
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0];
+      const end = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0];
+      return { start, end };
+    }
+    return { start: undefined, end: undefined };
+  };
+
+  const { start, end } = getPeriodRange();
+  const stats = db.getDashboardStats(start, end);
   const topProducts = db.getTopSellingProducts();
   const orders = db.getOrders();
   const expenses = db.getExpenses();
 
+  const filteredOrders = start && end 
+    ? orders.filter(o => o.date >= start && o.date <= end)
+    : orders;
+
   const categoryData = [
-    { name: 'Bottle', value: orders.filter(o => o.items.some(i => db.getProducts().find(p => p.id === i.productId)?.category === 'Bottle')).length },
-    { name: 'Spray', value: orders.filter(o => o.items.some(i => db.getProducts().find(p => p.id === i.productId)?.category === 'Spray')).length },
-    { name: 'Cap', value: orders.filter(o => o.items.some(i => db.getProducts().find(p => p.id === i.productId)?.category === 'Cap')).length },
+    { name: 'Bottle', value: filteredOrders.filter(o => o.items.some(i => db.getProducts().find(p => p.id === i.productId)?.category === 'Bottle')).length },
+    { name: 'Spray', value: filteredOrders.filter(o => o.items.some(i => db.getProducts().find(p => p.id === i.productId)?.category === 'Spray')).length },
+    { name: 'Cap', value: filteredOrders.filter(o => o.items.some(i => db.getProducts().find(p => p.id === i.productId)?.category === 'Cap')).length },
   ];
 
   return (
@@ -26,9 +52,32 @@ export const Reports: React.FC = () => {
           <h2 className="text-3xl font-bold text-slate-900">Financial Intelligence</h2>
           <p className="text-slate-500 mt-1">Enterprise performance and logistics auditing.</p>
         </div>
-        <div className="flex gap-2 print:hidden">
-          <Button variant="outline" icon={<Printer size={20} />} onClick={() => window.print()}>Generate PDF</Button>
-          <Button icon={<Download size={20} />}>Export Data</Button>
+        <div className="flex flex-wrap items-center gap-3 print:hidden">
+          {/* PERIOD SELECTOR */}
+          <div className="flex items-center space-x-1 bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
+            <button 
+              onClick={() => setPeriod('all')}
+              className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${period === 'all' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-100'}`}
+            >
+              All Time
+            </button>
+            <button 
+              onClick={() => setPeriod('this-month')}
+              className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${period === 'this-month' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-100'}`}
+            >
+              This Month
+            </button>
+            <button 
+              onClick={() => setPeriod('last-month')}
+              className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${period === 'last-month' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-100'}`}
+            >
+              Last Month
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" icon={<Printer size={20} />} onClick={() => window.print()}>Generate PDF</Button>
+            <Button icon={<Download size={20} />}>Export Data</Button>
+          </div>
         </div>
       </div>
 
