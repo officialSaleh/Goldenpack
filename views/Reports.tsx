@@ -39,11 +39,18 @@ export const Reports: React.FC = () => {
     ? orders.filter(o => o.date >= start && o.date <= end)
     : orders;
 
-  const categoryData = [
-    { name: 'Bottle', value: filteredOrders.filter(o => o.items.some(i => db.getProducts().find(p => p.id === i.productId)?.category === 'Bottle')).length },
-    { name: 'Spray', value: filteredOrders.filter(o => o.items.some(i => db.getProducts().find(p => p.id === i.productId)?.category === 'Spray')).length },
-    { name: 'Cap', value: filteredOrders.filter(o => o.items.some(i => db.getProducts().find(p => p.id === i.productId)?.category === 'Cap')).length },
-  ];
+  const products = db.getProducts();
+  const categoryTotals = filteredOrders.reduce((acc, order) => {
+    order.items.forEach(item => {
+      const product = products.find(p => p.id === item.productId);
+      if (product) {
+        acc[product.category] = (acc[product.category] || 0) + item.quantity;
+      }
+    });
+    return acc;
+  }, { Bottle: 0, Spray: 0, Cap: 0 } as Record<string, number>);
+
+  const categoryData = Object.entries(categoryTotals).map(([name, value]) => ({ name, value }));
 
   return (
     <div className="space-y-8 print:bg-white print:p-0">
