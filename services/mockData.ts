@@ -459,6 +459,16 @@ class DB {
     this.notify();
   }
 
+  async updateExpense(id: string, updates: Partial<Expense>) {
+    await updateDoc(doc(db_firestore, "expenses", id), updates);
+    this.notify();
+  }
+
+  async deleteExpense(id: string) {
+    await deleteDoc(doc(db_firestore, "expenses", id));
+    this.notify();
+  }
+
   getTrajectoryData() {
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const result = [];
