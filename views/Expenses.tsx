@@ -20,6 +20,7 @@ export const Expenses: React.FC = () => {
   
   const [formData, setFormData] = useState({
     category: EXPENSE_CATEGORIES[0] as ExpenseCategory,
+    customCategory: '',
     amount: '',
     date: new Date().toISOString().split('T')[0],
     notes: ''
@@ -29,6 +30,7 @@ export const Expenses: React.FC = () => {
     setEditingExpense(null);
     setFormData({
       category: EXPENSE_CATEGORIES[0] as ExpenseCategory,
+      customCategory: '',
       amount: '',
       date: new Date().toISOString().split('T')[0],
       notes: ''
@@ -40,6 +42,7 @@ export const Expenses: React.FC = () => {
     setEditingExpense(e.id);
     setFormData({
       category: e.category,
+      customCategory: e.customCategory || '',
       amount: e.amount.toString(),
       date: e.date,
       notes: e.notes || ''
@@ -51,6 +54,7 @@ export const Expenses: React.FC = () => {
     e.preventDefault();
     const expenseData = {
       category: formData.category,
+      customCategory: formData.category === 'Other' ? formData.customCategory : undefined,
       amount: parseFloat(formData.amount),
       date: formData.date,
       notes: formData.notes
@@ -97,7 +101,9 @@ export const Expenses: React.FC = () => {
                 <Wallet size={32} />
               </div>
               <div className="flex-1">
-                <h4 className="font-bold text-slate-900">{e.category}</h4>
+                <h4 className="font-bold text-slate-900">
+                  {e.category === 'Other' && e.customCategory ? e.customCategory : e.category}
+                </h4>
                 <p className="text-slate-500 text-sm font-medium">{e.date}</p>
                 {e.notes && <p className="text-xs text-slate-400 italic mt-1">{e.notes}</p>}
               </div>
@@ -136,6 +142,17 @@ export const Expenses: React.FC = () => {
               {EXPENSE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
+          {formData.category === 'Other' && (
+            <div className="animate-in slide-in-from-top-2 duration-300">
+              <Input 
+                label="Expense Title" 
+                placeholder="e.g. Office Supplies, Repairs..." 
+                required
+                value={formData.customCategory}
+                onChange={(e) => setFormData({...formData, customCategory: e.target.value})}
+              />
+            </div>
+          )}
           <Input 
             label={`Amount (${currencySymbol})`}
             type="number" 
