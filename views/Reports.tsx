@@ -41,7 +41,7 @@ export const Reports: React.FC = () => {
 
   const products = db.getProducts();
   const categoryTotals = filteredOrders.reduce((acc, order) => {
-    order.items.forEach(item => {
+    (order.items || []).forEach(item => {
       const product = products.find(p => p.id === item.productId);
       if (product) {
         acc[product.category] = (acc[product.category] || 0) + item.quantity;

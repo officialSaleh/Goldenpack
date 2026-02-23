@@ -1,9 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
-import { Truck, Search, Plus, Calendar, FileText, CheckCircle2, ChevronDown, Loader2, PackageOpen, Ship } from 'lucide-react';
+import { Truck, Search, Plus, Calendar, FileText, CheckCircle2, ChevronDown, Loader2, PackageOpen, Ship, Trash2, Box } from 'lucide-react';
 import { db } from '../services/mockData';
 import { Card, Button, Input, Modal, Badge } from '../components/UI';
-import { Container } from '../types';
+import { Container, ContainerItem, Category } from '../types';
+
+const CATEGORIES: Category[] = ['Bottle', 'Spray', 'Cap'];
 
 export const Containers: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -15,14 +17,69 @@ export const Containers: React.FC = () => {
   useEffect(() => db.subscribe(() => setTick(t => t + 1)), []);
 
   const containers = db.getContainers();
+  const products = db.getProducts();
 
   const [formData, setFormData] = useState({
     referenceNumber: '',
     arrivalDate: new Date().toISOString().split('T')[0],
     supplier: '',
-    itemCount: '',
-    notes: ''
+    notes: '',
+    items: [] as ContainerItem[]
   });
+
+  const [newItem, setNewItem] = useState<ContainerItem>({
+    productName: '',
+    category: 'Bottle',
+    size: 500,
+    quantity: 0,
+    costPrice: 0
+  });
+
+  const addItem = () => {
+    if (!newItem.productName || newItem.quantity <= 0) return;
+    setFormData({
+      ...formData,
+      items: [...formData.items, { ...newItem }]
+    });
+    setNewItem({
+      productName: '',
+      category: 'Bottle',
+      size: 500,
+      quantity: 0,
+      costPrice: 0
+    });
+  };
+
+  const removeItem = (index: number) => {
+    setFormData({
+      ...formData,
+      items: formData.items.filter((_, i) => i !== index)
+    });
+  };
+
+  const selectExistingProduct = (productId: string) => {
+    if (!productId) {
+      setNewItem({
+        productName: '',
+        category: 'Bottle',
+        size: 500,
+        quantity: 0,
+        costPrice: 0
+      });
+      return;
+    }
+    const p = products.find(prod => prod.id === productId);
+    if (p) {
+      setNewItem({
+        productId: p.id,
+        productName: p.name,
+        category: p.category,
+        size: p.size,
+        quantity: 0,
+        costPrice: p.costPrice
+      });
+    }
+  };
 
   const filtered = containers.filter(c => 
     c.referenceNumber.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -31,18 +88,29 @@ export const Containers: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (formData.items.length === 0) {
+      alert("Please add at least one item to the container.");
+      return;
+    }
+
     const newContainer: Container = {
       id: Math.random().toString(36).substr(2, 9),
       referenceNumber: formData.referenceNumber,
       arrivalDate: formData.arrivalDate,
       supplier: formData.supplier,
-      itemCount: parseInt(formData.itemCount) || 0,
+      items: formData.items,
       status: 'In Transit',
       notes: formData.notes
     };
     await db.addContainer(newContainer);
     setIsModalOpen(false);
-    setFormData({ referenceNumber: '', arrivalDate: new Date().toISOString().split('T')[0], supplier: '', itemCount: '', notes: '' });
+    setFormData({ 
+      referenceNumber: '', 
+      arrivalDate: new Date().toISOString().split('T')[0], 
+      supplier: '', 
+      notes: '',
+      items: []
+    });
   };
 
   const handleStatusUpdate = async (id: string, newStatus: Container['status']) => {
@@ -106,8 +174,21 @@ export const Containers: React.FC = () => {
               </div>
               <div className="flex items-center text-[10px] text-slate-500 font-black uppercase tracking-widest space-x-4">
                 <FileText size={14} className="text-brand-gold" />
-                <span>{c.itemCount.toLocaleString()} Strategic Units</span>
+                <span>{(c.items || []).reduce((sum, item) => sum + item.quantity, 0).toLocaleString()} Strategic Units</span>
               </div>
+            </div>
+
+            <div className="mt-6 space-y-2">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Manifest Details</p>
+              {(c.items || []).map((item, idx) => (
+                <div key={idx} className="flex justify-between items-center bg-brand-linen/20 p-3 rounded-xl border border-brand-linen/30">
+                  <div className="flex items-center space-x-3">
+                    <Box size={12} className="text-brand-gold" />
+                    <span className="text-[9px] font-bold text-slate-600">{item.productName}</span>
+                  </div>
+                  <span className="text-[9px] font-black text-brand-dark">{item.quantity.toLocaleString()}</span>
+                </div>
+              ))}
             </div>
 
             {c.notes && (
@@ -165,14 +246,76 @@ export const Containers: React.FC = () => {
               value={formData.arrivalDate}
               onChange={(e) => setFormData({...formData, arrivalDate: e.target.value})}
             />
-            <Input 
-              label="Unit Inventory Count" 
-              type="number" 
-              placeholder="5000" 
-              required 
-              value={formData.itemCount}
-              onChange={(e) => setFormData({...formData, itemCount: e.target.value})}
-            />
+          </div>
+
+          <div className="space-y-4 bg-brand-linen/20 p-6 rounded-[32px] border border-brand-linen/50">
+            <p className="text-[10px] font-black text-brand-dark uppercase tracking-widest mb-4">Shipment Manifest (Items)</p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Select Existing Product (Optional)</label>
+                <select 
+                  className="w-full bg-white border border-brand-linen rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-brand-gold transition-all"
+                  onChange={(e) => selectExistingProduct(e.target.value)}
+                  value={newItem.productId || ''}
+                >
+                  <option value="">-- New Product --</option>
+                  {products.map(p => (
+                    <option key={p.id} value={p.id}>{p.name} ({p.size}ml)</option>
+                  ))}
+                </select>
+              </div>
+              <Input 
+                label="Product Name" 
+                placeholder="e.g. 500ml Clear Bottle" 
+                value={newItem.productName}
+                onChange={(e) => setNewItem({...newItem, productName: e.target.value})}
+              />
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Category</label>
+                <select 
+                  className="w-full bg-white border border-brand-linen rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-brand-gold transition-all"
+                  value={newItem.category}
+                  onChange={(e) => setNewItem({...newItem, category: e.target.value as Category})}
+                >
+                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <Input 
+                label="Size (ml)" 
+                type="number" 
+                value={newItem.size}
+                onChange={(e) => setNewItem({...newItem, size: parseInt(e.target.value) || 0})}
+              />
+              <Input 
+                label="Quantity" 
+                type="number" 
+                value={newItem.quantity}
+                onChange={(e) => setNewItem({...newItem, quantity: parseInt(e.target.value) || 0})}
+              />
+              <Input 
+                label="Cost Price (per unit)" 
+                type="number" 
+                step="0.01"
+                value={newItem.costPrice}
+                onChange={(e) => setNewItem({...newItem, costPrice: parseFloat(e.target.value) || 0})}
+              />
+            </div>
+            <Button variant="outline" className="w-full mt-4" type="button" onClick={addItem}>Add to Manifest</Button>
+
+            <div className="mt-6 space-y-2">
+              {formData.items.map((item, idx) => (
+                <div key={idx} className="flex justify-between items-center bg-white p-4 rounded-2xl border border-brand-linen/50 shadow-sm">
+                  <div>
+                    <p className="text-xs font-black text-brand-dark">{item.productName}</p>
+                    <p className="text-[9px] text-slate-400 uppercase font-bold">{item.quantity} units @ {db.formatMoney(item.costPrice)}</p>
+                  </div>
+                  <button type="button" onClick={() => removeItem(idx)} className="text-rose-500 hover:bg-rose-50 p-2 rounded-lg transition-all">
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
           <Input 
             label="Operational Intelligence Notes" 

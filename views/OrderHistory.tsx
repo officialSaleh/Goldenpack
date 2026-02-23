@@ -336,7 +336,7 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ initialSearch, onSea
                 <span className="text-sm font-black text-brand-dark">{editingOrder.customerName}</span>
               </div>
               <div className="space-y-4">
-                {editingOrder.items.map((item) => (
+                {(editingOrder.items || []).map((item) => (
                   <div key={item.productId} className="flex items-center justify-between bg-white p-4 rounded-2xl border border-brand-linen/50 shadow-sm">
                     <div className="flex-1">
                       <p className="text-xs font-black text-brand-dark tracking-tight">{item.productName}</p>

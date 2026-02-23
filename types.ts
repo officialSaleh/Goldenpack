@@ -91,12 +91,21 @@ export interface Expense {
   userId?: string;
 }
 
+export interface ContainerItem {
+  productId?: string;
+  productName: string;
+  category: Category;
+  size: number;
+  quantity: number;
+  costPrice: number;
+}
+
 export interface Container {
   id: string;
   referenceNumber: string;
   arrivalDate: string;
   supplier: string;
-  itemCount: number;
+  items: ContainerItem[];
   status: 'In Transit' | 'Arrived' | 'Unloaded';
   notes?: string;
   userId?: string;

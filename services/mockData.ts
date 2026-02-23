@@ -8,6 +8,7 @@ import {
   AppSettings,
   DashboardStats,
   Container,
+  ContainerItem,
   Payment,
   Category
 } from '../types';
@@ -401,7 +402,7 @@ class DB {
       const oldOrder = orderSnap.data() as Order;
 
       // 1. Reverse old stock
-      for (const item of oldOrder.items) {
+      for (const item of (oldOrder.items || [])) {
         const productRef = doc(db_firestore, "products", item.productId);
         const productSnap = await transaction.get(productRef);
         if (productSnap.exists()) {
@@ -421,7 +422,7 @@ class DB {
       }
 
       // 3. Apply new stock (with check)
-      for (const item of updatedOrder.items) {
+      for (const item of (updatedOrder.items || [])) {
         const productRef = doc(db_firestore, "products", item.productId);
         const productSnap = await transaction.get(productRef);
         if (!productSnap.exists()) throw new Error(`Product ${item.productName} not found`);
@@ -455,7 +456,7 @@ class DB {
       const order = orderSnap.data() as Order;
 
       // 1. Reverse stock
-      for (const item of order.items) {
+      for (const item of (order.items || [])) {
         const productRef = doc(db_firestore, "products", item.productId);
         const productSnap = await transaction.get(productRef);
         if (productSnap.exists()) {
@@ -578,7 +579,83 @@ class DB {
   }
 
   async updateContainerStatus(id: string, status: Container['status']) {
-    await updateDoc(doc(db_firestore, "containers", id), { status });
+    if (!this.currentUserId) throw new Error("Unauthorized");
+    
+    await runTransaction(db_firestore, async (transaction) => {
+      const containerRef = doc(db_firestore, "containers", id);
+      const containerSnap = await transaction.get(containerRef);
+      if (!containerSnap.exists()) throw new Error("Container not found");
+      
+      const container = containerSnap.data() as Container;
+      const oldStatus = container.status;
+      
+      // If moving to Unloaded, inject stock
+      if (status === 'Unloaded' && oldStatus !== 'Unloaded') {
+        const items = container.items || [];
+        
+        // 1. COLLECT ALL READS FIRST
+        const productData: { [key: string]: any } = {};
+        const newProducts: any[] = [];
+        const existingProductUpdates: any[] = [];
+
+        for (const item of items) {
+          let productId = item.productId;
+          
+          if (!productId) {
+            const existing = this.products.find(p => 
+              p.name.toLowerCase() === item.productName.toLowerCase() && 
+              p.category === item.category && 
+              p.size === item.size
+            );
+            if (existing) productId = existing.id;
+          }
+
+          if (productId) {
+            const productRef = doc(db_firestore, "products", productId);
+            const productSnap = await transaction.get(productRef);
+            if (productSnap.exists()) {
+              productData[productId] = productSnap.data();
+              existingProductUpdates.push({ ref: productRef, item, productId });
+            } else if (!item.productId) {
+              // If it was supposed to be existing but not found in DB, treat as new
+              newProducts.push(item);
+            }
+          } else {
+            newProducts.push(item);
+          }
+        }
+
+        // 2. PERFORM ALL WRITES AFTER ALL READS
+        for (const item of newProducts) {
+          const newId = `PROD-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+          const productRef = doc(db_firestore, "products", newId);
+          transaction.set(productRef, {
+            id: newId,
+            name: item.productName,
+            category: item.category,
+            size: item.size,
+            costPrice: item.costPrice,
+            sellingPrice: item.costPrice * 1.5,
+            stockQuantity: item.quantity,
+            userId: this.currentUserId
+          });
+        }
+
+        for (const update of existingProductUpdates) {
+          const currentData = productData[update.productId];
+          const currentStock = currentData?.stockQuantity || 0;
+          transaction.update(update.ref, { 
+            stockQuantity: currentStock + update.item.quantity,
+            costPrice: update.item.costPrice
+          });
+          // Update local productData in case same product appears twice in manifest
+          productData[update.productId].stockQuantity = currentStock + update.item.quantity;
+        }
+      }
+      
+      transaction.update(containerRef, { status });
+    });
+    
     this.notify();
   }
 
