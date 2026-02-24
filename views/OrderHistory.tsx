@@ -22,6 +22,7 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ initialSearch, onSea
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [processingId, setProcessingId] = useState<string | null>(null);
 
   // Handle external search injection
   useEffect(() => {
@@ -90,6 +91,9 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ initialSearch, onSea
   );
 
   const getSmartStatus = (o: Order) => {
+    // Priority 1: Check explicit status for Bank Transfers
+    if (o.status === 'Pending Verification') return { label: 'Pending Verification', color: 'gold' as const };
+
     const paid = o.amountPaid || 0;
     const total = o.total;
     const remaining = total - paid;
@@ -104,16 +108,24 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ initialSearch, onSea
     return { label: o.paymentType === 'Credit' ? 'Unpaid' : 'Pending', color: 'indigo' as const };
   };
 
-  const handleMarkAsPaid = async (orderId: string) => {
-    if (!window.confirm("Mark this order as fully settled? This will update the customer balance.")) return;
+  const handleMarkAsPaid = async (order: Order) => {
+    const isVerification = order.status === 'Pending Verification';
+    const message = isVerification 
+      ? "Confirm that the bank transfer for this order has been verified?" 
+      : "Mark this order as fully settled? This will update the customer balance.";
+
+    if (!window.confirm(message)) return;
+    
     setProcessing(true);
+    setProcessingId(order.id);
     try {
-      await db.markOrderAsPaid(orderId);
+      await db.markOrderAsPaid(order.id);
       await fetchOrders(true, searchTerm);
     } catch (err) {
       alert("Failed to update status");
     } finally {
       setProcessing(false);
+      setProcessingId(null);
     }
   };
 
@@ -237,6 +249,9 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ initialSearch, onSea
                       <td className="px-8 py-5">
                         <p className="font-black text-brand-dark leading-none">{db.formatMoney(o.total)}</p>
                         <p className="text-[8px] font-bold text-slate-400 mt-1 uppercase tracking-widest">{o.paymentType} Protocol</p>
+                        {o.paymentReference && (
+                          <p className="text-[7px] font-black text-brand-gold mt-1 uppercase tracking-tighter truncate w-24">Ref: {o.paymentReference}</p>
+                        )}
                       </td>
                       <td className="px-8 py-5">
                         <div className="flex flex-col w-32">
@@ -264,14 +279,32 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ initialSearch, onSea
                       </td>
                       <td className="px-8 py-5 text-right">
                         <div className="flex items-center justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {statusInfo.label !== 'Settled' && (
+                          {o.status === 'Pending Verification' ? (
                             <button 
-                              onClick={() => handleMarkAsPaid(o.id)}
-                              className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
-                              title="Mark as Paid"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMarkAsPaid(o);
+                              }}
+                              disabled={processing}
+                              className={`p-2 rounded-lg transition-all flex items-center justify-center min-w-[32px] min-h-[32px] ${processingId === o.id ? 'text-brand-gold bg-brand-gold/10' : 'text-brand-gold hover:bg-brand-gold/10 bg-slate-50'}`}
+                              title="Verify Transfer"
                             >
-                              <CheckCircle size={16} />
+                              {processingId === o.id ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
                             </button>
+                          ) : (
+                            statusInfo.label !== 'Settled' && (
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMarkAsPaid(o);
+                                }}
+                                disabled={processing}
+                                className={`p-2 rounded-lg transition-all flex items-center justify-center min-w-[32px] min-h-[32px] ${processingId === o.id ? 'text-emerald-600 bg-emerald-50' : 'text-emerald-600 hover:bg-emerald-50 bg-slate-50'}`}
+                                title="Mark as Paid"
+                              >
+                                {processingId === o.id ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
+                              </button>
+                            )
                           )}
                           <button 
                             onClick={() => setEditingOrder(o)}

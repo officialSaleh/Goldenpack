@@ -5,7 +5,7 @@ import {
   ArrowRight, Printer, X, ChevronUp, Scan, Filter, Layers, Trash2, MapPin
 } from 'lucide-react';
 import { db } from '../services/mockData';
-import { Product, OrderItem, Customer, Order, Category } from '../types';
+import { Product, OrderItem, Customer, Order, Category, PaymentType } from '../types';
 import { VAT_RATE, CATEGORIES } from '../constants';
 import { Modal, Button, Badge } from '../components/UI';
 
@@ -14,7 +14,8 @@ export const POS: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [cart, setCart] = useState<OrderItem[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  const [paymentType, setPaymentType] = useState<'Cash' | 'Credit'>('Cash');
+  const [paymentType, setPaymentType] = useState<PaymentType>('Cash');
+  const [paymentReference, setPaymentReference] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [lastOrder, setLastOrder] = useState<Order | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -124,9 +125,10 @@ export const POS: React.FC = () => {
         items: billableItems,
         ...totals,
         paymentType,
-        status: paymentType === 'Cash' ? 'Paid' : 'Pending',
+        paymentReference: paymentType === 'Bank Transfer' ? paymentReference : undefined,
+        status: paymentType === 'Bank Transfer' ? 'Pending Verification' : (paymentType === 'Credit' ? 'Pending' : 'Paid'),
         dueDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
-        amountPaid: paymentType === 'Cash' ? totals.total : 0,
+        amountPaid: (paymentType === 'Credit' || paymentType === 'Bank Transfer') ? 0 : totals.total,
       };
 
       await db.createOrder(order);
@@ -362,19 +364,32 @@ export const POS: React.FC = () => {
             </div>
 
             <div className="flex gap-4">
-              {(['Cash', 'Credit'] as const).map(type => (
+              {(['Cash', 'Bank Transfer', 'Credit'] as const).map(type => (
                 <button 
                   key={type}
                   onClick={() => setPaymentType(type)} 
-                  className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] border-2 transition-all ${paymentType === type ? 'bg-brand-gold text-brand-dark border-brand-gold shadow-2xl shadow-brand-gold/20' : 'border-white/5 text-gray-600 hover:text-white'}`}
+                  className={`flex-1 py-4 rounded-2xl text-[9px] font-black uppercase tracking-[0.1em] border-2 transition-all ${paymentType === type ? 'bg-brand-gold text-brand-dark border-brand-gold shadow-2xl shadow-brand-gold/20' : 'border-white/5 text-gray-600 hover:text-white'}`}
                 >
-                  {type === 'Cash' ? 'Settled (Cash)' : 'Ledger (Credit)'}
+                  {type === 'Cash' ? 'Cash' : type === 'Bank Transfer' ? 'Transfer' : 'Credit'}
                 </button>
               ))}
             </div>
 
+            {paymentType === 'Bank Transfer' && (
+              <div className="space-y-3 animate-in slide-in-from-top-2 duration-300">
+                <label className="text-[9px] font-black text-brand-gold uppercase tracking-[0.3em] ml-1">Transfer Reference / ID</label>
+                <input 
+                  type="text"
+                  placeholder="Enter Transaction ID..."
+                  className="w-full py-4 px-6 bg-white/5 border border-white/10 rounded-2xl outline-none font-bold text-white focus:border-brand-gold transition-all text-sm"
+                  value={paymentReference}
+                  onChange={(e) => setPaymentReference(e.target.value)}
+                />
+              </div>
+            )}
+
             <button 
-              disabled={!selectedCustomer || cart.length === 0 || loading}
+              disabled={!selectedCustomer || cart.length === 0 || loading || (paymentType === 'Bank Transfer' && !paymentReference)}
               onClick={handleCheckoutInitiate}
               className="w-full py-6 bg-white text-brand-dark rounded-[32px] font-black uppercase tracking-[0.3em] text-sm hover:bg-brand-gold transition-all disabled:opacity-5 active:scale-95 flex items-center justify-center space-x-3 group shadow-2xl"
             >

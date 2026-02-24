@@ -41,8 +41,8 @@ export interface Customer {
   userId?: string;
 }
 
-export type OrderStatus = 'Pending' | 'Delivered' | 'Paid' | 'Overdue';
-export type PaymentType = 'Cash' | 'Credit';
+export type OrderStatus = 'Pending' | 'Delivered' | 'Paid' | 'Overdue' | 'Pending Verification';
+export type PaymentType = 'Cash' | 'Credit' | 'Bank Transfer';
 
 export interface OrderItem {
   productId: string;
@@ -64,6 +64,7 @@ export interface Order {
   status: OrderStatus;
   dueDate: string;
   amountPaid: number;
+  paymentReference?: string;
   userId?: string;
 }
 
