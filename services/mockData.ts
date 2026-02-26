@@ -720,6 +720,19 @@ class DB {
 
     const todaySales = this.orders.filter(o => o.date === today).reduce((s, o) => s + o.total, 0);
     const totalRevenue = filteredOrders.reduce((s, o) => s + o.total, 0);
+    
+    // Calculate total profit from sales (with fallback for old orders)
+    const totalProfitFromSales = filteredOrders.reduce((s, o) => {
+      if (o.totalProfit !== undefined) return s + o.totalProfit;
+      // Estimate for old orders that don't have totalProfit saved
+      const estimatedProfit = o.items.reduce((itemSum, item) => {
+        const p = this.products.find(prod => prod.id === item.productId);
+        const cost = p ? p.costPrice : item.price * 0.7; // Fallback to 30% margin
+        return itemSum + ((item.price - cost) * item.quantity);
+      }, 0);
+      return s + estimatedProfit;
+    }, 0);
+
     const outstandingCredit = this.customers.reduce((s, c) => s + c.outstandingBalance, 0);
     const lowStock = this.products.filter(p => p.stockQuantity < 50).length;
     const invValue = this.products.reduce((s, p) => s + (p.costPrice * p.stockQuantity), 0);
@@ -733,7 +746,7 @@ class DB {
       overdueCustomersCount: this.orders.filter(o => o.status !== 'Paid' && new Date(o.dueDate) < new Date()).length,
       lowStockAlerts: lowStock,
       totalInventoryValue: invValue,
-      netProfit: totalRevenue - totalExpenses
+      netProfit: totalProfitFromSales - totalExpenses
     };
   }
 

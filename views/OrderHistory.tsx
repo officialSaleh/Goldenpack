@@ -274,7 +274,14 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ initialSearch, onSea
                       <td className="px-8 py-5 font-medium text-slate-600">{o.customerName}</td>
                       <td className="px-8 py-5">
                         <p className="font-black text-brand-dark leading-none">{db.formatMoney(o.total)}</p>
-                        <p className="text-[8px] font-bold text-slate-400 mt-1 uppercase tracking-widest">{o.paymentType} Protocol</p>
+                        <div className="flex items-center space-x-2 mt-1">
+                          <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{o.paymentType} Protocol</p>
+                          {o.totalProfit !== undefined && (
+                            <span className="text-[7px] font-black text-emerald-600 bg-emerald-50 px-1 rounded uppercase tracking-tighter">
+                              Profit: {db.formatMoney(o.totalProfit)}
+                            </span>
+                          )}
+                        </div>
                         {o.paymentReference && (
                           <p className="text-[7px] font-black text-brand-gold mt-1 uppercase tracking-tighter truncate w-24">Ref: {o.paymentReference}</p>
                         )}

@@ -49,6 +49,7 @@ export interface OrderItem {
   productName: string;
   quantity: number;
   price: number;
+  costPrice: number;
 }
 
 export interface Order {
@@ -60,6 +61,7 @@ export interface Order {
   subtotal: number;
   vat: number; // 5%
   total: number;
+  totalProfit: number;
   paymentType: PaymentType;
   status: OrderStatus;
   dueDate: string;

@@ -59,7 +59,13 @@ export const POS: React.FC = () => {
       setCart(cart.map(item => item.productId === product.id ? { ...item, quantity: item.quantity + 1 } : item));
     } else {
       if (product.stockQuantity <= 0) return;
-      setCart([...cart, { productId: product.id, productName: product.name, quantity: 1, price: product.sellingPrice }]);
+      setCart([...cart, { 
+        productId: product.id, 
+        productName: product.name, 
+        quantity: 1, 
+        price: product.sellingPrice,
+        costPrice: product.costPrice
+      }]);
     }
   };
 
@@ -117,6 +123,10 @@ export const POS: React.FC = () => {
       // Filter items to only include those with quantity > 0 for the permanent record
       const billableItems = cart.filter(i => i.quantity > 0);
       
+      const totalProfit = billableItems.reduce((sum, item) => {
+        return sum + ((item.price - item.costPrice) * item.quantity);
+      }, 0);
+      
       const order: Order = {
         id: `ORD-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
         customerId: selectedCustomer.id,
@@ -124,11 +134,12 @@ export const POS: React.FC = () => {
         date: new Date().toISOString().split('T')[0],
         items: billableItems,
         ...totals,
+        totalProfit,
         paymentType,
-        paymentReference: paymentType === 'Bank Transfer' ? paymentReference : undefined,
         status: paymentType === 'Bank Transfer' ? 'Pending Verification' : (paymentType === 'Credit' ? 'Pending' : 'Paid'),
         dueDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
         amountPaid: (paymentType === 'Credit' || paymentType === 'Bank Transfer') ? 0 : totals.total,
+        ...(paymentType === 'Bank Transfer' && paymentReference ? { paymentReference } : {}),
       };
 
       await db.createOrder(order);

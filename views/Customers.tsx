@@ -331,11 +331,18 @@ export const Customers: React.FC<CustomersProps> = ({ onViewHistory }) => {
               </div>
 
               {/* Quick Stats Grid */}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                  <div className="bg-brand-linen/40 p-6 rounded-[32px] border border-brand-linen flex flex-col items-center">
                     <TrendingUp size={20} className="text-brand-gold mb-2" />
                     <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Invoiced</p>
                     <p className="text-sm font-black text-brand-dark">{db.formatMoney(detailedLedger.filter(l => l.type === 'Invoice').reduce((s, o) => s + o.total, 0))}</p>
+                 </div>
+                 <div className="bg-emerald-50/50 p-6 rounded-[32px] border border-emerald-100 flex flex-col items-center">
+                    <TrendingUp size={20} className="text-emerald-600 mb-2" />
+                    <p className="text-[8px] font-black text-emerald-400 uppercase tracking-widest mb-1">Lifetime Profit</p>
+                    <p className="text-sm font-black text-emerald-700">
+                      {db.formatMoney(detailedLedger.filter(l => l.type === 'Invoice').reduce((s, o) => s + (o.totalProfit || 0), 0))}
+                    </p>
                  </div>
                  <div className="bg-brand-linen/40 p-6 rounded-[32px] border border-brand-linen flex flex-col items-center">
                     <CheckCircle2 size={20} className="text-emerald-500 mb-2" />
