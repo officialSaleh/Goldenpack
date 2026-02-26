@@ -2,7 +2,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Search, ShoppingCart, Plus, Minus, AlertCircle, Package, CheckCircle2, 
-  ArrowRight, Printer, X, ChevronUp, Scan, Filter, Layers, Trash2, MapPin
+  ArrowRight, Printer, X, ChevronUp, Scan, Filter, Layers, Trash2, MapPin,
+  AlertTriangle, Info, History, Loader2, Wallet, FileText
 } from 'lucide-react';
 import { db } from '../services/mockData';
 import { Product, OrderItem, Customer, Order, Category, PaymentType } from '../types';
@@ -17,6 +18,9 @@ export const POS: React.FC = () => {
   const [paymentType, setPaymentType] = useState<PaymentType>('Cash');
   const [paymentReference, setPaymentReference] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showLedgerModal, setShowLedgerModal] = useState(false);
+  const [customerLedger, setCustomerLedger] = useState<any[]>([]);
+  const [loadingLedger, setLoadingLedger] = useState(false);
   const [lastOrder, setLastOrder] = useState<Order | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -114,6 +118,20 @@ export const POS: React.FC = () => {
     }
 
     setShowConfirmModal(true);
+  };
+
+  const handleOpenLedger = async () => {
+    if (!selectedCustomer) return;
+    setShowLedgerModal(true);
+    setLoadingLedger(true);
+    try {
+      const ledger = await db.getCustomerLedgerCloud(selectedCustomer.id);
+      setCustomerLedger(ledger);
+    } catch (err) {
+      console.error("Ledger fetch failed", err);
+    } finally {
+      setLoadingLedger(false);
+    }
   };
 
   const finalizeCheckout = async () => {
@@ -320,6 +338,31 @@ export const POS: React.FC = () => {
               </div>
             </div>
 
+            {selectedCustomer && selectedCustomer.outstandingBalance > 0 && (
+              <div className={`p-5 rounded-[32px] border animate-in slide-in-from-top-2 duration-500 ${selectedCustomer.outstandingBalance >= selectedCustomer.creditLimit ? 'bg-rose-500/10 border-rose-500/20' : 'bg-brand-gold/10 border-brand-gold/20'}`}>
+                <div className="flex items-start space-x-4">
+                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${selectedCustomer.outstandingBalance >= selectedCustomer.creditLimit ? 'bg-rose-500/20 text-rose-500' : 'bg-brand-gold/20 text-brand-gold'}`}>
+                    <AlertTriangle size={20} />
+                  </div>
+                  <div className="flex-1">
+                    <p className={`text-[9px] font-black uppercase tracking-[0.2em] mb-1 ${selectedCustomer.outstandingBalance >= selectedCustomer.creditLimit ? 'text-rose-500' : 'text-brand-gold'}`}>
+                      {selectedCustomer.outstandingBalance >= selectedCustomer.creditLimit ? 'Critical: Limit Exceeded' : 'Credit Reminder'}
+                    </p>
+                    <p className="text-xs font-bold text-gray-300 leading-snug">
+                      Outstanding Balance: <span className="text-white">{db.formatMoney(selectedCustomer.outstandingBalance)}</span>
+                    </p>
+                    <button 
+                      onClick={handleOpenLedger}
+                      className="mt-3 text-[10px] font-black text-brand-gold uppercase tracking-widest hover:underline flex items-center"
+                    >
+                      <History size={12} className="mr-1" />
+                      View Quick Ledger
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="space-y-4 pt-4">
               <div className="flex justify-between items-center px-1">
                  <h4 className="text-[10px] font-black text-gray-600 uppercase tracking-widest">Inventory List ({cart.length})</h4>
@@ -476,6 +519,57 @@ export const POS: React.FC = () => {
           <button onClick={() => setErrorMsg(null)} className="ml-2 hover:opacity-50 bg-white/20 p-1.5 rounded-full transition-colors"><X size={16}/></button>
         </div>
       )}
+
+      {/* Quick Ledger Modal */}
+      <Modal isOpen={showLedgerModal} onClose={() => setShowLedgerModal(false)} title="Quick Ledger Summary">
+        <div className="space-y-6">
+          {selectedCustomer && (
+            <div className="p-6 bg-brand-dark rounded-[32px] text-white flex justify-between items-center">
+              <div>
+                <p className="text-[10px] font-black text-brand-gold uppercase tracking-widest mb-1">Current Debt</p>
+                <p className="text-3xl font-black italic tracking-tighter">{db.formatMoney(selectedCustomer.outstandingBalance)}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Credit Limit</p>
+                <p className="text-lg font-black text-white">{db.formatMoney(selectedCustomer.creditLimit)}</p>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 scrollbar-hide">
+            {loadingLedger ? (
+              <div className="py-20 text-center">
+                <Loader2 size={32} className="animate-spin text-brand-gold mx-auto mb-4" />
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Synchronizing Ledger...</p>
+              </div>
+            ) : (
+              customerLedger.map((item, idx) => (
+                <div key={idx} className={`flex items-center justify-between p-4 rounded-2xl border ${item.type === 'Payment' ? 'bg-emerald-50/30 border-emerald-100' : 'bg-white border-slate-100'}`}>
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${item.type === 'Payment' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-600'}`}>
+                      {item.type === 'Payment' ? <Wallet size={16} /> : <History size={16} />}
+                    </div>
+                    <div>
+                      <p className="text-xs font-black text-slate-900 leading-none">{item.type === 'Payment' ? 'Payment' : `Order ${item.id}`}</p>
+                      <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-widest">{item.date}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-sm font-black ${item.type === 'Payment' ? 'text-emerald-600' : 'text-slate-900'}`}>
+                      {item.type === 'Payment' ? `-${db.formatMoney(item.amount)}` : db.formatMoney(item.total)}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
+            {!loadingLedger && customerLedger.length === 0 && (
+              <div className="py-20 text-center opacity-30 italic text-[10px] uppercase tracking-widest">No transaction history found.</div>
+            )}
+          </div>
+
+          <Button className="w-full py-4" onClick={() => setShowLedgerModal(false)}>Close Summary</Button>
+        </div>
+      </Modal>
     </div>
   );
 };
