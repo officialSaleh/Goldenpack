@@ -1,22 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/mockData';
-import { Wallet, Plus, DollarSign, Calendar, Edit2, Trash2 } from 'lucide-react';
+import { Wallet, Plus, DollarSign, Calendar, Edit2, Trash2, TrendingDown } from 'lucide-react';
 import { Card, Button, Modal, Input } from '../components/UI';
+import { MonthSelector } from '../components/MonthSelector';
 import { EXPENSE_CATEGORIES } from '../constants';
 import { ExpenseCategory } from '../types';
 
 export const Expenses: React.FC = () => {
-  const [expenses, setExpenses] = useState(db.getExpenses());
+  const [allExpenses, setAllExpenses] = useState(db.getExpenses());
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = db.subscribe(() => {
-      setExpenses(db.getExpenses());
+      setAllExpenses(db.getExpenses());
     });
     return () => unsubscribe();
   }, []);
+
+  const expenses = allExpenses.filter(e => {
+    const d = new Date(e.date);
+    return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
+  });
+
+  const monthlyTotal = expenses.reduce((sum, e) => sum + e.amount, 0);
   
   const [formData, setFormData] = useState({
     category: EXPENSE_CATEGORIES[0] as ExpenseCategory,
@@ -83,14 +93,33 @@ export const Expenses: React.FC = () => {
 
   return (
     <div className="space-y-8">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold text-slate-900">Expenses</h2>
           <p className="text-slate-500 mt-1">Track business operational costs.</p>
         </div>
-        <Button icon={<Plus size={20} />} onClick={handleOpenAdd}>
-          Record Expense
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="bg-white border border-slate-100 rounded-2xl px-6 py-3 flex items-center space-x-4 shadow-sm">
+            <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
+              <TrendingDown size={20} />
+            </div>
+            <div>
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Monthly Burn</p>
+              <p className="text-lg font-black text-slate-900 tracking-tighter">{db.formatMoney(monthlyTotal)}</p>
+            </div>
+          </div>
+          <MonthSelector 
+            selectedMonth={selectedMonth} 
+            selectedYear={selectedYear} 
+            onChange={(m, y) => {
+              setSelectedMonth(m);
+              setSelectedYear(y);
+            }} 
+          />
+          <Button icon={<Plus size={20} />} onClick={handleOpenAdd}>
+            Record Expense
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

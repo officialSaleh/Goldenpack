@@ -191,15 +191,25 @@ class DB {
   async getOrdersCloud(options: { 
     search?: string, 
     lastDoc?: any, 
-    pageSize?: number 
+    pageSize?: number,
+    month?: number, // 0-11
+    year?: number
   }) {
     if (!this.currentUserId) throw new Error("Unauthenticated request");
-    const { search, lastDoc, pageSize = 15 } = options;
+    const { search, lastDoc, pageSize = 15, month, year } = options;
     const constraints: QueryConstraint[] = [
       where("userId", "==", this.currentUserId),
       orderBy("date", "desc"), 
       limit(pageSize)
     ];
+    
+    // If month and year are provided, we can add date range constraints
+    if (month !== undefined && year !== undefined) {
+      const startDate = new Date(year, month, 1).toISOString().split('T')[0];
+      const endDate = new Date(year, month + 1, 0).toISOString().split('T')[0];
+      constraints.push(where("date", ">=", startDate));
+      constraints.push(where("date", "<=", endDate));
+    }
     
     if (lastDoc) {
       constraints.push(startAfter(lastDoc));

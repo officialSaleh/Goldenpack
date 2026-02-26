@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { db } from '../services/mockData';
-import { Clock, Search, FileX, Loader2, ChevronDown, AlertTriangle, ArrowLeft, Edit2, Trash2, CheckCircle, X } from 'lucide-react';
+import { Clock, Search, FileX, Loader2, ChevronDown, AlertTriangle, ArrowLeft, Edit2, Trash2, CheckCircle, X, TrendingUp } from 'lucide-react';
 import { Card, Badge, Input, Button, Modal } from '../components/UI';
+import { MonthSelector } from '../components/MonthSelector';
 import { Order, OrderItem, OrderStatus } from '../types';
 
 interface OrderHistoryProps {
@@ -23,6 +24,8 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ initialSearch, onSea
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
   // Handle external search injection
   useEffect(() => {
@@ -33,7 +36,7 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ initialSearch, onSea
   }, [initialSearch]);
 
   // Phase A: Cloud Search Fetcher
-  const fetchOrders = useCallback(async (isInitial = true, search = '') => {
+  const fetchOrders = useCallback(async (isInitial = true, search = '', month?: number, year?: number) => {
     if (isInitial) {
       setLoading(true);
       setError(null);
@@ -45,7 +48,9 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ initialSearch, onSea
       const result = await db.getOrdersCloud({
         search: search,
         lastDoc: isInitial ? null : lastVisible,
-        pageSize: 15
+        pageSize: 15,
+        month: month,
+        year: year
       });
 
       if (isInitial) {
@@ -67,17 +72,19 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ initialSearch, onSea
 
   // Initial Load
   useEffect(() => {
-    fetchOrders(true, searchTerm);
-  }, []);
+    fetchOrders(true, searchTerm, selectedMonth, selectedYear);
+  }, [selectedMonth, selectedYear]);
 
   // Debounced Search Logic
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
-      fetchOrders(true, searchTerm);
+      fetchOrders(true, searchTerm, selectedMonth, selectedYear);
     }, 600);
 
     return () => clearTimeout(delayDebounceFn);
   }, [searchTerm]);
+
+  const monthlyTotal = orders.reduce((sum, o) => sum + o.total, 0);
 
   const SkeletonRow = () => (
     <tr className="animate-pulse">
@@ -197,6 +204,25 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ initialSearch, onSea
             <h2 className="text-3xl font-black text-brand-dark tracking-tighter uppercase italic">Order <span className="text-brand-gold">History</span></h2>
             <p className="text-slate-500 mt-1 font-bold uppercase tracking-widest text-[10px]">Cloud-synchronized transaction archives.</p>
           </div>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="bg-white border border-brand-linen rounded-2xl px-6 py-3 flex items-center space-x-4 shadow-sm">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <TrendingUp size={20} />
+            </div>
+            <div>
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Monthly Sales</p>
+              <p className="text-lg font-black text-brand-dark tracking-tighter">{db.formatMoney(monthlyTotal)}</p>
+            </div>
+          </div>
+          <MonthSelector 
+            selectedMonth={selectedMonth} 
+            selectedYear={selectedYear} 
+            onChange={(m, y) => {
+              setSelectedMonth(m);
+              setSelectedYear(y);
+            }} 
+          />
         </div>
       </div>
 
