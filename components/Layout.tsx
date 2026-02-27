@@ -114,11 +114,11 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
       </div>
 
       {/* Main Content Area */}
-      <main className={`flex-1 w-full bg-brand-bg ${activeTab === 'pos' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
-        <div className={`transition-all duration-500 ${
+      <main className="flex-1 overflow-y-auto w-full bg-brand-bg">
+        <div className={`transition-all duration-500 mx-auto ${
           activeTab === 'pos' 
-            ? 'max-w-full h-full' 
-            : 'pt-24 lg:pt-0 mx-auto p-4 md:p-6 lg:p-8 max-w-[1600px]'
+            ? 'pt-20 lg:pt-0 max-w-full h-full p-4 lg:p-6 xl:p-8' 
+            : 'pt-24 lg:pt-0 p-4 md:p-6 lg:p-8 max-w-[1600px]'
         }`}>
           {/* Breadcrumb / Page Title helper on mobile */}
           <div className="lg:hidden flex items-center space-x-2 text-gray-400 text-[10px] font-black uppercase tracking-widest mb-6">
