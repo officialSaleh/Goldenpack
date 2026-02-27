@@ -182,12 +182,12 @@ export const POS: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4 h-[calc(100vh-160px)] lg:h-full relative overflow-hidden">
+    <div className="flex flex-col lg:flex-row h-full pt-20 lg:pt-0 relative overflow-hidden bg-slate-50">
       {/* Product Discovery Area */}
-      <div className="flex-1 flex flex-col bg-white rounded-3xl lg:rounded-[40px] shadow-sm border border-slate-100 overflow-hidden">
+      <div className="flex-1 flex flex-col bg-white lg:border-r lg:border-slate-200 overflow-hidden">
         
         {/* Top Search & Scan Bar */}
-        <div className="p-4 bg-slate-50/30 space-y-4">
+        <div className="p-6 xl:p-8 bg-slate-50/30 space-y-4 border-b border-slate-100">
           <div className="flex items-center space-x-3">
             <div className="flex-1 relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -225,7 +225,7 @@ export const POS: React.FC = () => {
         </div>
         
         {/* Speed-Row List / Grid */}
-        <div className="flex-1 overflow-y-auto p-4 xl:p-6 scrollbar-hide space-y-3 lg:grid lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-5 lg:gap-4 xl:gap-6 lg:space-y-0">
+        <div className="flex-1 overflow-y-auto p-4 lg:p-0 scrollbar-hide space-y-3 lg:grid lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-5 lg:space-y-0">
           {filteredProducts.map(p => {
             const cartItem = cart.find(i => i.productId === p.id);
             const isInCart = !!cartItem;
@@ -234,7 +234,7 @@ export const POS: React.FC = () => {
             return (
               <div 
                 key={p.id}
-                className={`flex lg:flex-col bg-white border border-slate-100 p-3 lg:p-5 rounded-2xl lg:rounded-[32px] transition-all relative overflow-hidden group ${p.stockQuantity <= 0 ? 'opacity-40 grayscale pointer-events-none' : 'hover:border-brand-gold hover:shadow-xl'}`}
+                className={`flex lg:flex-col bg-white border border-slate-100 p-3 lg:p-5 rounded-2xl lg:rounded-none lg:border-0 lg:border-b lg:border-r lg:border-slate-50 transition-all relative overflow-hidden group ${p.stockQuantity <= 0 ? 'opacity-40 grayscale pointer-events-none' : 'hover:bg-slate-50/50'}`}
               >
                 {/* Product Detail Section */}
                 <div className="flex lg:flex-col flex-1 min-w-0 items-center lg:items-start space-x-4 lg:space-x-0">
@@ -314,7 +314,7 @@ export const POS: React.FC = () => {
         ${isCartOpen ? 'translate-y-0' : 'translate-y-full lg:translate-y-0'}
       `}>
         <div className="absolute inset-0 bg-brand-dark/60 backdrop-blur-sm lg:hidden" onClick={() => setIsCartOpen(false)} />
-        <div className="absolute bottom-0 left-0 right-0 h-[94vh] lg:h-full bg-brand-dark rounded-t-[48px] lg:rounded-[48px] flex flex-col shadow-2xl overflow-hidden">
+        <div className="absolute bottom-0 left-0 right-0 h-[94vh] lg:h-full bg-brand-dark rounded-t-[48px] lg:rounded-none flex flex-col shadow-2xl overflow-hidden lg:border-l lg:border-white/10">
           
           <div className="p-6 xl:p-8 border-b border-white/5 flex items-center justify-between bg-white/5">
             <div>
