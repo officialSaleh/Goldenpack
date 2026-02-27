@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { db } from '../services/mockData';
-import { Clock, Search, FileX, Loader2, ChevronDown, AlertTriangle, ArrowLeft, Edit2, Trash2, CheckCircle, X, TrendingUp } from 'lucide-react';
+import { Clock, Search, FileX, Loader2, ChevronDown, AlertTriangle, ArrowLeft, Edit2, Trash2, CheckCircle, X, TrendingUp, Info } from 'lucide-react';
 import { Card, Badge, Input, Button, Modal } from '../components/UI';
 import { MonthSelector } from '../components/MonthSelector';
 import { Order, OrderItem, OrderStatus } from '../types';
@@ -113,6 +113,19 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ initialSearch, onSea
     if (isOverdue) return { label: 'Overdue', color: 'rose' as const };
     
     return { label: o.paymentType === 'Credit' ? 'Unpaid' : 'Pending', color: 'indigo' as const };
+  };
+
+  const handleToggleVAT = async (orderId: string) => {
+    setProcessingId(orderId);
+    try {
+      await db.toggleOrderVAT(orderId);
+      fetchOrders(true, searchTerm);
+    } catch (err) {
+      console.error("VAT toggle failed", err);
+      setError("Failed to adjust VAT protocol.");
+    } finally {
+      setProcessingId(null);
+    }
   };
 
   const handleMarkAsPaid = async (order: Order) => {
@@ -270,12 +283,20 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ initialSearch, onSea
 
                   return (
                     <tr key={o.id} className="hover:bg-slate-50 transition-colors group">
-                      <td className="px-8 py-5 font-bold text-slate-900 tracking-tight">{o.id}</td>
+                      <td className="px-8 py-5">
+                        <p className="font-bold text-slate-900 tracking-tight leading-none">{o.id}</p>
+                        <p className="text-[8px] font-bold text-slate-400 mt-1 uppercase tracking-widest">{o.date.split('T')[0]}</p>
+                      </td>
                       <td className="px-8 py-5 font-medium text-slate-600">{o.customerName}</td>
                       <td className="px-8 py-5">
                         <p className="font-black text-brand-dark leading-none">{db.formatMoney(o.total)}</p>
-                        <div className="flex items-center space-x-2 mt-1">
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
                           <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{o.paymentType} Protocol</p>
+                          {o.vatEnabled === false && (
+                            <span className="text-[7px] font-black text-slate-500 bg-slate-100 px-1 rounded uppercase tracking-tighter">
+                              VAT Exempt
+                            </span>
+                          )}
                           {o.totalProfit !== undefined && (
                             <span className="text-[7px] font-black text-emerald-600 bg-emerald-50 px-1 rounded uppercase tracking-tighter">
                               Profit: {db.formatMoney(o.totalProfit)}
@@ -339,6 +360,17 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ initialSearch, onSea
                               </button>
                             )
                           )}
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleVAT(o.id);
+                            }}
+                            disabled={processingId === o.id}
+                            className={`p-2 rounded-lg transition-all ${o.vatEnabled === false ? 'text-slate-400 hover:text-brand-gold hover:bg-brand-linen/30' : 'text-emerald-600 hover:bg-emerald-50'} bg-slate-50`}
+                            title={o.vatEnabled === false ? "Enable VAT" : "Disable VAT"}
+                          >
+                            {processingId === o.id ? <Loader2 size={16} className="animate-spin" /> : <Info size={16} />}
+                          </button>
                           <button 
                             onClick={() => setEditingOrder(o)}
                             className="p-2 text-slate-400 hover:text-brand-gold hover:bg-brand-linen/30 rounded-lg transition-all"

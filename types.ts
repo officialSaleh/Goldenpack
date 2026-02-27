@@ -35,6 +35,7 @@ export interface Customer {
   name: string;
   businessName: string;
   phone: string;
+  trn?: string;
   defaultCreditDays: number;
   creditLimit: number;
   outstandingBalance: number;
@@ -60,6 +61,7 @@ export interface Order {
   items: OrderItem[];
   subtotal: number;
   vat: number; // 5%
+  vatEnabled: boolean;
   total: number;
   totalProfit: number;
   paymentType: PaymentType;

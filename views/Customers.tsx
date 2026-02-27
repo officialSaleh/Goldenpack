@@ -36,6 +36,7 @@ export const Customers: React.FC<CustomersProps> = ({ onViewHistory }) => {
     name: '',
     businessName: '',
     phone: '',
+    trn: '',
     creditLimit: '',
     defaultCreditDays: '30'
   });
@@ -93,6 +94,7 @@ export const Customers: React.FC<CustomersProps> = ({ onViewHistory }) => {
       name: formData.name,
       businessName: formData.businessName,
       phone: formData.phone,
+      trn: formData.trn,
       creditLimit: parseFloat(formData.creditLimit),
       defaultCreditDays: parseInt(formData.defaultCreditDays),
       outstandingBalance: 0
@@ -100,7 +102,7 @@ export const Customers: React.FC<CustomersProps> = ({ onViewHistory }) => {
     try {
       await db.addCustomer(newCustomer);
       setIsModalOpen(false);
-      setFormData({ name: '', businessName: '', phone: '', creditLimit: '', defaultCreditDays: '30' });
+      setFormData({ name: '', businessName: '', phone: '', trn: '', creditLimit: '', defaultCreditDays: '30' });
       fetchCustomers(true, '');
     } catch (err: any) {
       alert(err.message);
@@ -137,6 +139,7 @@ export const Customers: React.FC<CustomersProps> = ({ onViewHistory }) => {
         name: formData.name,
         businessName: formData.businessName,
         phone: formData.phone,
+        trn: formData.trn,
         creditLimit: parseFloat(formData.creditLimit)
       });
       setIsDetailModalOpen(false);
@@ -200,7 +203,7 @@ export const Customers: React.FC<CustomersProps> = ({ onViewHistory }) => {
         <Button icon={<Plus size={20} />} onClick={() => {
           // Fix: Remove undefined setEditing and ensure selectedCustomer is null for new entry
           setSelectedCustomer(null);
-          setFormData({ name: '', businessName: '', phone: '', creditLimit: '', defaultCreditDays: '30' });
+          setFormData({ name: '', businessName: '', phone: '', trn: '', creditLimit: '', defaultCreditDays: '30' });
           setIsModalOpen(true);
         }}>
           New Customer
@@ -253,6 +256,12 @@ export const Customers: React.FC<CustomersProps> = ({ onViewHistory }) => {
                     <Phone size={12} className="text-brand-gold" />
                     <span>{c.phone}</span>
                   </div>
+                  {c.trn && (
+                    <div className="flex items-center text-slate-500 text-sm space-x-2 font-bold uppercase tracking-widest text-[10px]">
+                      <FileText size={12} className="text-brand-gold" />
+                      <span>TRN: {c.trn}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-10 p-5 bg-brand-linen/30 rounded-3xl border border-brand-linen/50">
@@ -320,6 +329,7 @@ export const Customers: React.FC<CustomersProps> = ({ onViewHistory }) => {
                   <div className="flex flex-wrap justify-center md:justify-start gap-3 mt-3">
                     <Badge color="gold">{selectedCustomer.businessName}</Badge>
                     <Badge color="slate">{selectedCustomer.phone}</Badge>
+                    {selectedCustomer.trn && <Badge color="indigo">TRN: {selectedCustomer.trn}</Badge>}
                   </div>
                 </div>
                 <div className="text-center md:text-right">
@@ -414,6 +424,7 @@ export const Customers: React.FC<CustomersProps> = ({ onViewHistory }) => {
                        name: selectedCustomer.name,
                        businessName: selectedCustomer.businessName,
                        phone: selectedCustomer.phone,
+                       trn: selectedCustomer.trn || '',
                        creditLimit: selectedCustomer.creditLimit.toString(),
                        defaultCreditDays: selectedCustomer.defaultCreditDays.toString()
                      });
@@ -538,6 +549,12 @@ export const Customers: React.FC<CustomersProps> = ({ onViewHistory }) => {
             required 
             value={formData.phone}
             onChange={(e) => setFormData({...formData, phone: e.target.value})}
+          />
+          <Input 
+            label="TRN Number" 
+            placeholder="15-digit Tax Registration Number" 
+            value={formData.trn}
+            onChange={(e) => setFormData({...formData, trn: e.target.value})}
           />
           <div className="grid grid-cols-2 gap-6">
             <Input 

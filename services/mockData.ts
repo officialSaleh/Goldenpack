@@ -13,6 +13,7 @@ import {
   Category
 } from '../types';
 import { db_firestore } from './firebase';
+import { VAT_RATE } from '../constants';
 import { 
   collection, 
   doc, 
@@ -206,7 +207,7 @@ class DB {
     // If month and year are provided, we can add date range constraints
     if (month !== undefined && year !== undefined) {
       const startDate = new Date(year, month, 1).toISOString().split('T')[0];
-      const endDate = new Date(year, month + 1, 0).toISOString().split('T')[0];
+      const endDate = new Date(year, month + 1, 0).toISOString().split('T')[0] + 'T23:59:59.999Z';
       constraints.push(where("date", ">=", startDate));
       constraints.push(where("date", "<=", endDate));
     }
@@ -360,6 +361,45 @@ class DB {
       transaction.set(orderRef, { ...order, userId: this.currentUserId });
     });
 
+    this.notify();
+  }
+
+  async toggleOrderVAT(orderId: string) {
+    if (!this.currentUserId) throw new Error("Unauthorized");
+    await runTransaction(db_firestore, async (transaction) => {
+      const orderRef = doc(db_firestore, "orders", orderId);
+      const orderSnap = await transaction.get(orderRef);
+      if (!orderSnap.exists()) throw new Error("Order not found");
+      
+      const order = orderSnap.data() as Order;
+      const currentVatEnabled = order.vatEnabled !== undefined ? order.vatEnabled : true; // Assume true for old orders
+      const newVatEnabled = !currentVatEnabled;
+      
+      const subtotal = order.subtotal;
+      const newVat = newVatEnabled ? subtotal * VAT_RATE : 0;
+      const newTotal = subtotal + newVat;
+      const totalDiff = newTotal - order.total;
+      
+      // Update order
+      transaction.update(orderRef, {
+        vat: newVat,
+        total: newTotal,
+        vatEnabled: newVatEnabled,
+        // If it was fully paid, we keep it fully paid (adjusting amountPaid)
+        // If it was partially paid, we keep amountPaid same, total changes
+        amountPaid: order.status === 'Paid' ? newTotal : order.amountPaid
+      });
+      
+      // Update customer balance if it's a credit order and not fully paid
+      if (order.paymentType === 'Credit' && order.status !== 'Paid') {
+        const customerRef = doc(db_firestore, "customers", order.customerId);
+        const customerSnap = await transaction.get(customerRef);
+        if (customerSnap.exists()) {
+          const currentBalance = customerSnap.data()?.outstandingBalance || 0;
+          transaction.update(customerRef, { outstandingBalance: currentBalance + totalDiff });
+        }
+      }
+    });
     this.notify();
   }
 

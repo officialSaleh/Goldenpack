@@ -17,6 +17,7 @@ export const POS: React.FC = () => {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [paymentType, setPaymentType] = useState<PaymentType>('Cash');
   const [paymentReference, setPaymentReference] = useState('');
+  const [vatEnabled, setVatEnabled] = useState(true);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showLedgerModal, setShowLedgerModal] = useState(false);
   const [customerLedger, setCustomerLedger] = useState<any[]>([]);
@@ -95,9 +96,9 @@ export const POS: React.FC = () => {
 
   const totals = useMemo(() => {
     const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-    const vat = subtotal * VAT_RATE;
+    const vat = vatEnabled ? subtotal * VAT_RATE : 0;
     return { subtotal, vat, total: subtotal + vat };
-  }, [cart]);
+  }, [cart, vatEnabled]);
 
   const handleCheckoutInitiate = () => {
     if (!selectedCustomer || cart.length === 0) return;
@@ -149,9 +150,10 @@ export const POS: React.FC = () => {
         id: `ORD-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
         customerId: selectedCustomer.id,
         customerName: selectedCustomer.name,
-        date: new Date().toISOString().split('T')[0],
+        date: new Date().toISOString(),
         items: billableItems,
         ...totals,
+        vatEnabled,
         totalProfit,
         paymentType,
         status: paymentType === 'Bank Transfer' ? 'Pending Verification' : (paymentType === 'Credit' ? 'Pending' : 'Paid'),
@@ -406,11 +408,35 @@ export const POS: React.FC = () => {
           </div>
 
           <div className="p-8 bg-black/50 border-t border-white/5 space-y-8">
+            <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
+              <div className="flex items-center space-x-3">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${vatEnabled ? 'bg-brand-gold text-brand-dark' : 'bg-white/10 text-gray-500'}`}>
+                  <Info size={16} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-white uppercase tracking-widest leading-none">VAT Protocol (5%)</p>
+                  <p className="text-[8px] font-bold text-gray-500 uppercase tracking-widest mt-1">{vatEnabled ? 'Active in Gulf Region' : 'Zero-Rated / Exempt'}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setVatEnabled(!vatEnabled)}
+                className={`w-12 h-6 rounded-full transition-all relative ${vatEnabled ? 'bg-brand-gold' : 'bg-white/10'}`}
+              >
+                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${vatEnabled ? 'right-1' : 'left-1'}`} />
+              </button>
+            </div>
+
             <div className="space-y-4">
               <div className="flex justify-between text-[11px] font-black text-gray-500 uppercase tracking-[0.2em]">
                 <span>Logistics Subtotal</span>
                 <span className="text-white">{db.formatMoney(totals.subtotal)}</span>
               </div>
+              {vatEnabled && (
+                <div className="flex justify-between text-[11px] font-black text-emerald-500 uppercase tracking-[0.2em]">
+                  <span>VAT (5.0%)</span>
+                  <span>{db.formatMoney(totals.vat)}</span>
+                </div>
+              )}
               <div className="flex justify-between items-center">
                 <span className="text-xs font-black text-brand-gold uppercase tracking-[0.4em] italic">Final Settlement</span>
                 <span className="text-4xl font-black text-brand-gold tracking-tighter">{db.formatMoney(totals.total)}</span>
