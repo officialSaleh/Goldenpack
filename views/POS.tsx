@@ -225,7 +225,7 @@ export const POS: React.FC = () => {
         </div>
         
         {/* Speed-Row List / Grid */}
-        <div className="flex-1 overflow-y-auto p-4 scrollbar-hide space-y-3 lg:grid lg:grid-cols-3 xl:grid-cols-4 lg:gap-4 lg:space-y-0">
+        <div className="flex-1 overflow-y-auto p-4 xl:p-6 scrollbar-hide space-y-3 lg:grid lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-5 lg:gap-4 xl:gap-6 lg:space-y-0">
           {filteredProducts.map(p => {
             const cartItem = cart.find(i => i.productId === p.id);
             const isInCart = !!cartItem;
@@ -310,13 +310,13 @@ export const POS: React.FC = () => {
 
       {/* Optimized Cart Sidebar */}
       <div className={`
-        fixed inset-0 z-50 transition-transform duration-500 transform lg:relative lg:translate-y-0 lg:z-0 lg:w-[400px] lg:flex
+        fixed inset-0 z-50 transition-transform duration-500 transform lg:relative lg:translate-y-0 lg:z-0 lg:w-[32%] xl:w-[28%] 2xl:w-[24%] min-w-[380px] max-w-[500px] lg:flex
         ${isCartOpen ? 'translate-y-0' : 'translate-y-full lg:translate-y-0'}
       `}>
         <div className="absolute inset-0 bg-brand-dark/60 backdrop-blur-sm lg:hidden" onClick={() => setIsCartOpen(false)} />
         <div className="absolute bottom-0 left-0 right-0 h-[94vh] lg:h-full bg-brand-dark rounded-t-[48px] lg:rounded-[48px] flex flex-col shadow-2xl overflow-hidden">
           
-          <div className="p-8 border-b border-white/5 flex items-center justify-between bg-white/5">
+          <div className="p-6 xl:p-8 border-b border-white/5 flex items-center justify-between bg-white/5">
             <div>
               <h3 className="text-xl font-black text-white italic uppercase tracking-tighter">Current <span className="text-brand-gold">Order</span></h3>
               <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">Live Transaction Buffer</p>
@@ -324,7 +324,7 @@ export const POS: React.FC = () => {
             <button onClick={() => setIsCartOpen(false)} className="lg:hidden w-12 h-12 flex items-center justify-center text-white/40 bg-white/5 rounded-full"><X size={24} /></button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-8 space-y-6 scrollbar-hide">
+          <div className="flex-1 overflow-y-auto p-6 xl:p-8 space-y-6 scrollbar-hide">
             <div className="space-y-3">
               <label className="text-[9px] font-black text-brand-gold uppercase tracking-[0.3em] ml-1">Assign Customer Entity</label>
               <div className="relative group">
@@ -407,7 +407,7 @@ export const POS: React.FC = () => {
             </div>
           </div>
 
-          <div className="p-8 bg-black/50 border-t border-white/5 space-y-8">
+          <div className="p-6 xl:p-8 bg-black/50 border-t border-white/5 space-y-6 xl:space-y-8">
             <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
               <div className="flex items-center space-x-3">
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${vatEnabled ? 'bg-brand-gold text-brand-dark' : 'bg-white/10 text-gray-500'}`}>
