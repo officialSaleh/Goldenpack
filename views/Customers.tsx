@@ -56,7 +56,7 @@ export const Customers: React.FC<CustomersProps> = ({ onViewHistory }) => {
       const result = await db.getCustomersCloud({
         search: search,
         lastDoc: isInitial ? null : lastVisible,
-        pageSize: 12
+        pageSize: 100
       });
 
       if (isInitial) {
@@ -66,7 +66,7 @@ export const Customers: React.FC<CustomersProps> = ({ onViewHistory }) => {
       }
 
       setLastVisible(result.lastVisible);
-      setHasMore(result.customers.length === 12);
+      setHasMore(result.customers.length === 100);
     } catch (err: any) {
       console.error("Cloud Customer Error:", err);
       setError("Cloud synchronization failed. Please check your network.");

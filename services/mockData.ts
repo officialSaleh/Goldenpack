@@ -120,10 +120,11 @@ class DB {
     );
 
     this.unsubscribers.push(
-      onSnapshot(query(collection(db_firestore, "customers"), filterByOwner, limit(100)), (snapshot) => {
+      onSnapshot(query(collection(db_firestore, "customers"), filterByOwner, limit(500)), (snapshot) => {
         this.customers = snapshot.docs
           .map(d => ({ id: d.id, ...d.data() } as Customer))
-          .filter(c => !c.isDeleted);
+          .filter(c => !c.isDeleted)
+          .sort((a, b) => a.name.localeCompare(b.name));
         this.notify();
         this.saveLocal();
       })
@@ -178,7 +179,7 @@ class DB {
     pageSize?: number 
   }) {
     if (!this.currentUserId) throw new Error("Unauthenticated request");
-    const { search, lastDoc, pageSize = 12 } = options;
+    const { search, lastDoc, pageSize = 100 } = options;
     const constraints: QueryConstraint[] = [
       where("userId", "==", this.currentUserId),
       limit(pageSize)
@@ -193,7 +194,8 @@ class DB {
     
     let customers = snapshot.docs
       .map(d => ({ id: d.id, ...d.data() } as Customer))
-      .filter(c => !c.isDeleted);
+      .filter(c => !c.isDeleted)
+      .sort((a, b) => a.name.localeCompare(b.name));
     
     if (search) {
       const lowerSearch = search.toLowerCase();
