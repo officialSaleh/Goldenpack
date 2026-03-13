@@ -39,6 +39,7 @@ export interface Customer {
   defaultCreditDays: number;
   creditLimit: number;
   outstandingBalance: number;
+  isDeleted?: boolean;
   userId?: string;
 }
 
@@ -84,7 +85,24 @@ export interface Payment {
   userId?: string;
 }
 
-export type ExpenseCategory = 'Warehouse Rent' | 'Truck Fuel' | 'Salaries' | 'Telecommunication' | 'Other';
+export type ExpenseCategory = 'Warehouse Rent' | 'Truck Fuel' | 'Salaries' | 'Telecommunication' | 'Local Purchase' | 'Other';
+
+export interface LocalPurchase {
+  id: string;
+  date: string;
+  supplier: string;
+  items: {
+    productId?: string;
+    productName: string;
+    category: Category;
+    size: number;
+    quantity: number;
+    costPrice: number;
+  }[];
+  totalAmount: number;
+  notes?: string;
+  userId?: string;
+}
 
 export interface Expense {
   id: string;
@@ -112,6 +130,7 @@ export interface Container {
   supplier: string;
   items: ContainerItem[];
   status: 'In Transit' | 'Arrived' | 'Unloaded';
+  isDeleted?: boolean;
   notes?: string;
   userId?: string;
 }

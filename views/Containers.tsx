@@ -10,7 +10,10 @@ const CATEGORIES: Category[] = ['Bottle', 'Spray', 'Cap'];
 export const Containers: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [selectedContainer, setSelectedContainer] = useState<Container | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Real-time synchronization
   const [, setTick] = useState(0);
@@ -124,6 +127,20 @@ export const Containers: React.FC = () => {
     }
   };
 
+  const handleDeleteContainer = async () => {
+    if (!selectedContainer) return;
+    setIsDeleting(true);
+    try {
+      await db.softDeleteContainer(selectedContainer.id);
+      setIsDeleteModalOpen(false);
+      setSelectedContainer(null);
+    } catch (err: any) {
+      alert(err.message || "Failed to delete container");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'In Transit': return <Ship size={20} className="text-brand-gold" />;
@@ -159,9 +176,20 @@ export const Containers: React.FC = () => {
               <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-500 ${c.status === 'Arrived' ? 'bg-emerald-50' : c.status === 'Unloaded' ? 'bg-slate-50' : 'bg-brand-linen'}`}>
                 {updatingId === c.id ? <Loader2 size={24} className="animate-spin text-brand-gold" /> : getStatusIcon(c.status)}
               </div>
-              <Badge color={c.status === 'Arrived' ? 'emerald' : c.status === 'Unloaded' ? 'slate' : 'gold'}>
-                {c.status}
-              </Badge>
+              <div className="flex flex-col items-end gap-2">
+                <Badge color={c.status === 'Arrived' ? 'emerald' : c.status === 'Unloaded' ? 'slate' : 'gold'}>
+                  {c.status}
+                </Badge>
+                <button 
+                  onClick={() => {
+                    setSelectedContainer(c);
+                    setIsDeleteModalOpen(true);
+                  }}
+                  className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
             </div>
             
             <h3 className="text-2xl font-black text-brand-dark tracking-tighter mb-1 uppercase italic">{c.referenceNumber}</h3>
@@ -328,6 +356,40 @@ export const Containers: React.FC = () => {
             <Button className="flex-1 py-5" type="submit">Deploy Strategy</Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal isOpen={isDeleteModalOpen} onClose={() => !isDeleting && setIsDeleteModalOpen(false)} title="Decommission Shipment">
+        <div className="space-y-6 text-center">
+          <div className="w-20 h-20 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto shadow-inner">
+            <Trash2 size={40} />
+          </div>
+          <div>
+            <h3 className="text-xl font-black text-brand-dark mb-2">Are you absolutely sure?</h3>
+            <p className="text-slate-500 text-sm font-medium leading-relaxed">
+              This will remove shipment <span className="font-black text-brand-dark">{selectedContainer?.referenceNumber}</span> from active logistics. 
+              This action cannot be undone, but historical inventory injections will remain.
+            </p>
+          </div>
+          <div className="flex gap-4 pt-4">
+            <Button 
+              variant="outline" 
+              className="flex-1" 
+              onClick={() => setIsDeleteModalOpen(false)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button 
+              className="flex-1 bg-rose-600 hover:bg-rose-700 text-white border-rose-600" 
+              onClick={handleDeleteContainer}
+              disabled={isDeleting}
+              icon={isDeleting ? <Loader2 className="animate-spin" size={20} /> : <Trash2 size={20} />}
+            >
+              Confirm Deletion
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

@@ -20,6 +20,7 @@ export const EXPENSE_CATEGORIES = [
   'Truck Fuel', 
   'Salaries', 
   'Telecommunication', 
+  'Local Purchase',
   'Other'
 ] as const;
 

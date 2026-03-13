@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Users, Search, Plus, Phone, Briefcase, ChevronRight, History, CreditCard, Wallet, CheckCircle2, Loader2, AlertCircle, ChevronDown, Edit3, X, FileText, ArrowUpRight, TrendingUp } from 'lucide-react';
+import { Users, Search, Plus, Phone, Briefcase, ChevronRight, History, CreditCard, Wallet, CheckCircle2, Loader2, AlertCircle, ChevronDown, Edit3, X, FileText, ArrowUpRight, TrendingUp, Trash2 } from 'lucide-react';
 import { db } from '../services/mockData';
 import { Card, Button, Input, Modal, Badge } from '../components/UI';
 import { Customer } from '../types';
@@ -21,10 +21,12 @@ export const Customers: React.FC<CustomersProps> = ({ onViewHistory }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [detailedLedger, setDetailedLedger] = useState<any[]>([]);
   const [loadingLedger, setLoadingLedger] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('Cash');
@@ -176,6 +178,21 @@ export const Customers: React.FC<CustomersProps> = ({ onViewHistory }) => {
     }
   };
 
+  const handleDeleteCustomer = async () => {
+    if (!selectedCustomer) return;
+    setIsDeleting(true);
+    try {
+      await db.softDeleteCustomer(selectedCustomer.id);
+      setIsDeleteModalOpen(false);
+      setSelectedCustomer(null);
+      fetchCustomers(true, searchTerm);
+    } catch (err: any) {
+      alert(err.message || "Failed to delete customer");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const SkeletonCard = () => (
     <Card className="animate-pulse">
       <div className="flex items-start justify-between mb-8">
@@ -241,9 +258,21 @@ export const Customers: React.FC<CustomersProps> = ({ onViewHistory }) => {
                   <div className="w-16 h-16 rounded-2xl bg-brand-linen flex items-center justify-center text-brand-dark font-black text-2xl shadow-inner group-hover:bg-brand-gold transition-colors">
                     {c.name.charAt(0)}
                   </div>
-                  <Badge color={isAtLimit ? 'rose' : c.outstandingBalance > 0 ? 'amber' : 'emerald'}>
-                    {status}
-                  </Badge>
+                  <div className="flex flex-col items-end gap-2">
+                    <Badge color={isAtLimit ? 'rose' : c.outstandingBalance > 0 ? 'amber' : 'emerald'}>
+                      {status}
+                    </Badge>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedCustomer(c);
+                        setIsDeleteModalOpen(true);
+                      }}
+                      className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
                 
                 <h3 className="text-xl font-black text-brand-dark tracking-tight">{c.name}</h3>
@@ -581,6 +610,40 @@ export const Customers: React.FC<CustomersProps> = ({ onViewHistory }) => {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal isOpen={isDeleteModalOpen} onClose={() => !isDeleting && setIsDeleteModalOpen(false)} title="Decommission Entity">
+        <div className="space-y-6 text-center">
+          <div className="w-20 h-20 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto shadow-inner">
+            <Trash2 size={40} />
+          </div>
+          <div>
+            <h3 className="text-xl font-black text-brand-dark mb-2">Are you absolutely sure?</h3>
+            <p className="text-slate-500 text-sm font-medium leading-relaxed">
+              This will remove <span className="font-black text-brand-dark">{selectedCustomer?.name}</span> from active intelligence. 
+              Historical ledger data will be preserved for auditing, but they will no longer appear in new sales.
+            </p>
+          </div>
+          <div className="flex gap-4 pt-4">
+            <Button 
+              variant="outline" 
+              className="flex-1" 
+              onClick={() => setIsDeleteModalOpen(false)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button 
+              className="flex-1 bg-rose-600 hover:bg-rose-700 text-white border-rose-600" 
+              onClick={handleDeleteCustomer}
+              disabled={isDeleting}
+              icon={isDeleting ? <Loader2 className="animate-spin" size={20} /> : <Trash2 size={20} />}
+            >
+              Confirm Deletion
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

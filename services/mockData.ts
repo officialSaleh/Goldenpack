@@ -10,7 +10,8 @@ import {
   Container,
   ContainerItem,
   Payment,
-  Category
+  Category,
+  LocalPurchase
 } from '../types';
 import { db_firestore } from './firebase';
 import { VAT_RATE } from '../constants';
@@ -42,6 +43,7 @@ class DB {
   orders: Order[] = [];
   expenses: Expense[] = [];
   containers: Container[] = [];
+  localPurchases: LocalPurchase[] = [];
   settings: AppSettings | null = null;
   private unsubscribers: Unsubscribe[] = [];
   private onSettingsChange: ((settings: AppSettings | null) => void) | null = null;
@@ -119,7 +121,9 @@ class DB {
 
     this.unsubscribers.push(
       onSnapshot(query(collection(db_firestore, "customers"), filterByOwner, limit(100)), (snapshot) => {
-        this.customers = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Customer));
+        this.customers = snapshot.docs
+          .map(d => ({ id: d.id, ...d.data() } as Customer))
+          .filter(c => !c.isDeleted);
         this.notify();
         this.saveLocal();
       })
@@ -145,7 +149,17 @@ class DB {
 
     this.unsubscribers.push(
       onSnapshot(query(collection(db_firestore, "containers"), filterByOwner), (snapshot) => {
-        this.containers = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Container));
+        this.containers = snapshot.docs
+          .map(d => ({ id: d.id, ...d.data() } as Container))
+          .filter(c => !c.isDeleted);
+        this.notify();
+        this.saveLocal();
+      })
+    );
+
+    this.unsubscribers.push(
+      onSnapshot(query(collection(db_firestore, "localPurchases"), filterByOwner, orderBy("date", "desc"), limit(50)), (snapshot) => {
+        this.localPurchases = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as LocalPurchase));
         this.notify();
         this.saveLocal();
       })
@@ -172,7 +186,9 @@ class DB {
     const q = query(collection(db_firestore, "customers"), ...constraints);
     const snapshot = await getDocs(q);
     
-    let customers = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Customer));
+    let customers = snapshot.docs
+      .map(d => ({ id: d.id, ...d.data() } as Customer))
+      .filter(c => !c.isDeleted);
     
     if (search) {
       const lowerSearch = search.toLowerCase();
@@ -275,6 +291,7 @@ class DB {
       orders: this.orders,
       expenses: this.expenses,
       containers: this.containers,
+      localPurchases: this.localPurchases,
       settings: this.settings
     }));
   }
@@ -291,6 +308,7 @@ class DB {
   getOrders() { return this.orders; }
   getExpenses() { return [...this.expenses].sort((a, b) => b.date.localeCompare(a.date)); }
   getContainers() { return this.containers; }
+  getLocalPurchases() { return this.localPurchases; }
 
   async addProduct(p: Product) { 
     if (!this.currentUserId) throw new Error("Unauthorized");
@@ -622,6 +640,11 @@ class DB {
     this.notify();
   }
 
+  async softDeleteCustomer(id: string) {
+    await updateDoc(doc(db_firestore, "customers", id), { isDeleted: true });
+    this.notify();
+  }
+
   async addContainer(c: Container) { 
     if (!this.currentUserId) throw new Error("Unauthorized");
     await setDoc(doc(db_firestore, "containers", c.id), { ...c, userId: this.currentUserId }); 
@@ -706,6 +729,80 @@ class DB {
       transaction.update(containerRef, { status });
     });
     
+    this.notify();
+  }
+
+  async softDeleteContainer(id: string) {
+    await updateDoc(doc(db_firestore, "containers", id), { isDeleted: true });
+    this.notify();
+  }
+
+  async recordLocalPurchase(purchase: LocalPurchase) {
+    if (!this.currentUserId) throw new Error("Unauthorized");
+
+    await runTransaction(db_firestore, async (transaction) => {
+      // 1. Process Items and Update Stock
+      for (const item of purchase.items) {
+        let productId = item.productId;
+
+        // If no ID, try to find by name/category/size
+        if (!productId) {
+          const existing = this.products.find(p => 
+            p.name.toLowerCase() === item.productName.toLowerCase() && 
+            p.category === item.category && 
+            p.size === item.size
+          );
+          if (existing) productId = existing.id;
+        }
+
+        if (productId) {
+          // Update existing product
+          const productRef = doc(db_firestore, "products", productId);
+          const productSnap = await transaction.get(productRef);
+          if (productSnap.exists()) {
+            const currentStock = productSnap.data()?.stockQuantity || 0;
+            transaction.update(productRef, { 
+              stockQuantity: currentStock + item.quantity,
+              costPrice: item.costPrice // Update cost price to latest local purchase price
+            });
+          }
+        } else {
+          // Create new product
+          const newId = `PROD-LOC-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+          const productRef = doc(db_firestore, "products", newId);
+          transaction.set(productRef, {
+            id: newId,
+            name: item.productName,
+            category: item.category,
+            size: item.size,
+            costPrice: item.costPrice,
+            sellingPrice: item.costPrice * 1.5, // Default 50% margin
+            stockQuantity: item.quantity,
+            userId: this.currentUserId
+          });
+          // Update item in purchase record with new ID
+          item.productId = newId;
+        }
+      }
+
+      // 2. Create Local Purchase Record
+      const purchaseRef = doc(db_firestore, "localPurchases", purchase.id);
+      transaction.set(purchaseRef, { ...purchase, userId: this.currentUserId });
+
+      // 3. Create Corresponding Expense Record
+      const expenseId = `EXP-PURCH-${purchase.id}`;
+      const expenseRef = doc(db_firestore, "expenses", expenseId);
+      const expense: Expense = {
+        id: expenseId,
+        category: 'Local Purchase',
+        amount: purchase.totalAmount,
+        date: purchase.date,
+        notes: `Local purchase from ${purchase.supplier}. Ref: ${purchase.id}`,
+        userId: this.currentUserId!
+      };
+      transaction.set(expenseRef, expense);
+    });
+
     this.notify();
   }
 
