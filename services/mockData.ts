@@ -130,8 +130,11 @@ class DB {
     );
 
     this.unsubscribers.push(
-      onSnapshot(query(collection(db_firestore, "orders"), filterByOwner, orderBy("date", "desc"), limit(100)), (snapshot) => {
-        this.orders = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Order));
+      onSnapshot(query(collection(db_firestore, "orders"), filterByOwner), (snapshot) => {
+        this.orders = snapshot.docs
+          .map(d => ({ id: d.id, ...d.data() } as Order))
+          .sort((a, b) => b.date.localeCompare(a.date))
+          .slice(0, 100);
         this.notify();
         this.saveLocal();
       })
@@ -158,8 +161,11 @@ class DB {
     );
 
     this.unsubscribers.push(
-      onSnapshot(query(collection(db_firestore, "localPurchases"), filterByOwner, orderBy("date", "desc"), limit(50)), (snapshot) => {
-        this.localPurchases = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as LocalPurchase));
+      onSnapshot(query(collection(db_firestore, "localPurchases"), filterByOwner), (snapshot) => {
+        this.localPurchases = snapshot.docs
+          .map(d => ({ id: d.id, ...d.data() } as LocalPurchase))
+          .sort((a, b) => b.date.localeCompare(a.date))
+          .slice(0, 50);
         this.notify();
         this.saveLocal();
       })
@@ -175,7 +181,6 @@ class DB {
     const { search, lastDoc, pageSize = 12 } = options;
     const constraints: QueryConstraint[] = [
       where("userId", "==", this.currentUserId),
-      orderBy("name", "asc"), 
       limit(pageSize)
     ];
     
@@ -216,7 +221,6 @@ class DB {
     const { search, lastDoc, pageSize = 15, month, year } = options;
     const constraints: QueryConstraint[] = [
       where("userId", "==", this.currentUserId),
-      orderBy("date", "desc"), 
       limit(pageSize)
     ];
     
@@ -258,8 +262,7 @@ class DB {
     const qOrders = query(
       collection(db_firestore, "orders"),
       where("userId", "==", this.currentUserId),
-      where("customerId", "==", customerId),
-      orderBy("date", "desc")
+      where("customerId", "==", customerId)
     );
     const snapOrders = await getDocs(qOrders);
     const orders = snapOrders.docs.map(d => ({ id: d.id, ...d.data(), type: 'Invoice' } as any));
@@ -268,8 +271,7 @@ class DB {
     const qPayments = query(
       collection(db_firestore, "payments"),
       where("userId", "==", this.currentUserId),
-      where("customerId", "==", customerId),
-      orderBy("date", "desc")
+      where("customerId", "==", customerId)
     );
     const snapPayments = await getDocs(qPayments);
     const payments = snapPayments.docs.map(d => ({ id: d.id, ...d.data(), type: 'Payment' } as any));

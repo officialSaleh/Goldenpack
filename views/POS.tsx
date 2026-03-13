@@ -186,29 +186,29 @@ export const POS: React.FC = () => {
     <div className="h-full relative overflow-hidden flex flex-col">
       {/* Step 1: Product Discovery View (Always Visible) */}
       <div className={`flex-1 flex flex-col bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden transition-all duration-500 ${isCheckingOut ? 'scale-[0.98] blur-[2px] opacity-50 pointer-events-none' : 'animate-in fade-in'}`}>
-        {/* Top Search & Scan Bar */}
-        <div className="p-4 lg:p-6 xl:p-8 bg-slate-50/30 space-y-4 border-b border-slate-100">
+        {/* Top Search & Scan Bar - STICKY & GLASSMORPHISM */}
+        <div className="sticky top-0 z-30 p-4 lg:p-6 xl:p-8 bg-white/80 backdrop-blur-xl space-y-4 border-b border-slate-100 shadow-sm shadow-slate-200/20">
           <div className="flex items-center space-x-3">
-            <div className="flex-1 relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <div className="flex-1 relative group">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand-gold transition-colors" size={18} />
               <input 
                 type="text" 
                 placeholder="Search products..." 
-                className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-brand-gold/10 outline-none transition-all font-bold text-slate-900 text-sm"
+                className="w-full pl-12 pr-4 py-3.5 bg-slate-50/50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-brand-gold/10 focus:border-brand-gold outline-none transition-all font-bold text-slate-900 text-sm"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <button className="w-12 h-12 bg-brand-dark text-brand-gold rounded-2xl flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-lg shadow-brand-dark/10">
+            <button className="w-12 h-12 lg:w-14 lg:h-14 bg-brand-dark text-brand-gold rounded-2xl flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-lg shadow-brand-dark/10">
               <Scan size={20} />
             </button>
           </div>
 
-          {/* Category Tabs */}
+          {/* Category Tabs - REFINED SPACING */}
           <div className="flex overflow-x-auto scrollbar-hide space-x-2 pb-1">
             <button 
               onClick={() => setSelectedCategory('All')}
-              className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all border-2 ${selectedCategory === 'All' ? 'bg-brand-gold border-brand-gold text-brand-dark' : 'bg-white border-slate-100 text-slate-400'}`}
+              className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] whitespace-nowrap transition-all border-2 ${selectedCategory === 'All' ? 'bg-brand-gold border-brand-gold text-brand-dark shadow-lg shadow-brand-gold/20' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-200'}`}
             >
               All Items
             </button>
@@ -216,7 +216,7 @@ export const POS: React.FC = () => {
               <button 
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
-                className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all border-2 ${selectedCategory === cat ? 'bg-brand-gold border-brand-gold text-brand-dark' : 'bg-white border-slate-100 text-slate-400'}`}
+                className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] whitespace-nowrap transition-all border-2 ${selectedCategory === cat ? 'bg-brand-gold border-brand-gold text-brand-dark shadow-lg shadow-brand-gold/20' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-200'}`}
               >
                 {cat}s
               </button>
@@ -224,8 +224,8 @@ export const POS: React.FC = () => {
           </div>
         </div>
         
-        {/* Speed-Row List / Grid - Optimized for Visibility */}
-        <div className="flex-1 overflow-y-auto p-4 lg:p-6 xl:p-8 scrollbar-hide space-y-3 lg:grid lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-6 lg:gap-4 xl:gap-6 lg:space-y-0">
+        {/* Speed-Row List / Grid - OPTIMIZED LANDSCAPE LAYOUT */}
+        <div className="flex-1 overflow-y-auto p-4 lg:p-6 xl:p-8 scrollbar-hide grid grid-cols-1 xl:grid-cols-2 3xl:grid-cols-3 gap-4 xl:gap-6">
           {filteredProducts.map(p => {
             const cartItem = cart.find(i => i.productId === p.id);
             const isInCart = !!cartItem;
@@ -234,54 +234,49 @@ export const POS: React.FC = () => {
             return (
               <div 
                 key={p.id}
-                className={`flex lg:flex-col bg-white border border-slate-100 p-4 rounded-[32px] transition-all relative overflow-hidden group ${p.stockQuantity <= 0 ? 'opacity-40 grayscale pointer-events-none' : 'hover:border-brand-gold hover:shadow-xl'}`}
+                className={`flex items-center bg-white border border-slate-100 p-4 lg:p-5 rounded-[28px] transition-all relative overflow-hidden group ${p.stockQuantity <= 0 ? 'opacity-40 grayscale pointer-events-none' : 'hover:border-brand-gold hover:shadow-xl hover:bg-slate-50/50'}`}
               >
-                {/* Product Detail Section */}
-                <div className="flex lg:flex-col flex-1 min-w-0 items-center lg:items-start space-x-4 lg:space-x-0">
-                  <div className={`w-12 h-12 lg:w-16 lg:h-16 rounded-2xl lg:rounded-3xl flex items-center justify-center shrink-0 mb-0 lg:mb-4 transition-colors ${p.category === 'Bottle' ? 'bg-indigo-50 text-indigo-600' : p.category === 'Spray' ? 'bg-amber-50 text-amber-600' : 'bg-rose-50 text-rose-600'}`}>
-                    <Package size={24} className="lg:w-8 lg:h-8" />
+                {/* Left: Product Icon */}
+                <div className={`w-12 h-12 lg:w-16 lg:h-16 rounded-2xl lg:rounded-3xl flex items-center justify-center shrink-0 mr-4 lg:mr-6 transition-all group-hover:scale-105 ${p.category === 'Bottle' ? 'bg-indigo-50 text-indigo-600' : p.category === 'Spray' ? 'bg-amber-50 text-amber-600' : 'bg-rose-50 text-rose-600'}`}>
+                  <Package size={24} className="lg:w-8 lg:h-8" />
+                </div>
+                
+                {/* Center: Product Details */}
+                <div className="flex-1 min-w-0 mr-4">
+                  <h4 className="text-sm lg:text-lg font-black text-slate-900 truncate tracking-tight leading-none uppercase mb-1.5">{p.name}</h4>
+                  <div className="flex items-center space-x-3">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">{p.size}ml • {p.category}</p>
+                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-lg ${isLowStock ? 'bg-rose-50 text-rose-600 animate-pulse' : 'bg-slate-100 text-slate-500'}`}>
+                      {p.stockQuantity} Left
+                    </span>
                   </div>
-                  
-                  <div className="flex-1 min-w-0 lg:w-full">
-                    <div className="flex justify-between items-start mb-1">
-                      <h4 className="text-sm lg:text-base font-black text-brand-dark truncate pr-2 tracking-tight leading-tight uppercase">{p.name}</h4>
-                      <p className="text-sm font-black text-brand-gold shrink-0 lg:hidden">{db.formatMoney(p.sellingPrice)}</p>
+                  {p.warehouseArea && (
+                    <div className="flex items-center mt-2 text-[9px] font-black text-brand-gold uppercase tracking-widest opacity-80">
+                      <MapPin size={10} className="mr-1" />
+                      <span>{p.warehouseArea}</span>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{p.size}ml • {p.category}</p>
-                      <span className={`lg:hidden text-[9px] font-black px-2 py-0.5 rounded-lg ${isLowStock ? 'bg-rose-50 text-rose-600 animate-pulse' : 'bg-slate-100 text-slate-500'}`}>
-                        {p.stockQuantity} Left
-                      </span>
-                    </div>
-
-                    {p.warehouseArea && (
-                      <div className="flex items-center mt-2 text-[9px] font-black text-brand-gold uppercase tracking-widest">
-                        <MapPin size={10} className="mr-1" />
-                        <span>{p.warehouseArea}</span>
-                      </div>
-                    )}
-                  </div>
+                  )}
                 </div>
 
-                {/* Pricing & Quick Qty Controls */}
-                <div className="mt-0 lg:mt-6 flex flex-col lg:flex-row lg:items-center justify-between gap-3 shrink-0">
-                  <p className="hidden lg:block text-xl font-black text-brand-dark tracking-tighter">{db.formatMoney(p.sellingPrice)}</p>
+                {/* Right: Pricing & Controls */}
+                <div className="flex flex-col items-end shrink-0 space-y-3">
+                  <p className="text-base lg:text-xl font-black text-brand-dark tracking-tighter">{db.formatMoney(p.sellingPrice)}</p>
                   
                   {isInCart ? (
-                    <div className="flex items-center bg-brand-linen/50 rounded-xl p-1 border border-brand-linen lg:flex-1 lg:max-w-[140px]">
-                      <button onClick={() => updateQty(p.id, -1)} className="w-8 h-8 lg:w-8 lg:h-8 flex items-center justify-center bg-white rounded-lg text-brand-dark shadow-sm active:scale-90 transition-transform"><Minus size={14}/></button>
+                    <div className="flex items-center bg-brand-linen/40 rounded-xl p-1 border border-brand-linen/50 animate-in zoom-in-95 duration-200">
+                      <button onClick={() => updateQty(p.id, -1)} className="w-8 h-8 flex items-center justify-center bg-white rounded-lg text-brand-dark shadow-sm active:scale-90 transition-transform hover:text-brand-gold"><Minus size={14}/></button>
                       <input 
                         type="number"
-                        className="flex-1 w-full text-center font-black text-brand-dark text-xs bg-transparent border-none outline-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        className="w-10 text-center font-black text-brand-dark text-xs bg-transparent border-none outline-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         value={cartItem.quantity}
                         onChange={(e) => updateQty(p.id, 0, parseInt(e.target.value) || 0)}
                       />
-                      <button onClick={() => updateQty(p.id, 1)} className="w-8 h-8 lg:w-8 lg:h-8 flex items-center justify-center bg-white rounded-lg text-brand-dark shadow-sm active:scale-90 transition-transform"><Plus size={14}/></button>
+                      <button onClick={() => updateQty(p.id, 1)} className="w-8 h-8 flex items-center justify-center bg-white rounded-lg text-brand-dark shadow-sm active:scale-90 transition-transform hover:text-brand-gold"><Plus size={14}/></button>
                     </div>
                   ) : (
                     <button 
                       onClick={() => addToCart(p)}
-                      className="w-10 h-10 lg:w-12 lg:h-12 bg-brand-gold text-brand-dark rounded-xl lg:rounded-2xl flex items-center justify-center hover:bg-brand-dark hover:text-brand-gold transition-all active:scale-95 shadow-md shadow-brand-gold/10 group"
+                      className="w-10 h-10 lg:w-12 lg:h-12 bg-brand-gold text-brand-dark rounded-xl lg:rounded-2xl flex items-center justify-center hover:bg-brand-dark hover:text-brand-gold transition-all active:scale-95 shadow-md shadow-brand-gold/10"
                     >
                       <Plus size={20} />
                     </button>
