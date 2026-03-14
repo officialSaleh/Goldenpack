@@ -335,7 +335,12 @@ export const POS: React.FC = () => {
                 </div>
                 <div className="flex items-center bg-white rounded-xl p-1 border border-slate-100">
                   <button onClick={() => updateQty(item.productId, -1)} className="w-7 h-7 flex items-center justify-center text-brand-dark hover:text-brand-gold transition-colors"><Minus size={12}/></button>
-                  <span className="w-8 text-center font-black text-brand-dark text-xs">{item.quantity}</span>
+                  <input 
+                    type="number"
+                    className="w-10 text-center font-black text-brand-dark text-xs bg-transparent border-none outline-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    value={item.quantity}
+                    onChange={(e) => updateQty(item.productId, 0, parseInt(e.target.value) || 0)}
+                  />
                   <button onClick={() => updateQty(item.productId, 1)} className="w-7 h-7 flex items-center justify-center text-brand-dark hover:text-brand-gold transition-colors"><Plus size={12}/></button>
                 </div>
                 <button onClick={() => removeFromCart(item.productId)} className="p-2 text-slate-300 hover:text-rose-500 transition-colors">

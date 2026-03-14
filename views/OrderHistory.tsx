@@ -448,7 +448,12 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ initialSearch, onSea
                       >
                         -
                       </button>
-                      <span className="text-sm font-black w-8 text-center">{item.quantity}</span>
+                      <input 
+                        type="number"
+                        className="w-10 text-center font-black text-brand-dark text-sm bg-transparent border-none outline-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        value={item.quantity}
+                        onChange={(e) => updateItemQuantity(item.productId, parseInt(e.target.value) || 0)}
+                      />
                       <button 
                         type="button"
                         onClick={() => updateItemQuantity(item.productId, item.quantity + 1)}

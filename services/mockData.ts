@@ -247,6 +247,10 @@ class DB {
     
     let orders = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Order));
 
+    // Filter out future dates (cleanup sample data)
+    const today = new Date().toISOString().split('T')[0];
+    orders = orders.filter(o => o.date.split('T')[0] <= today);
+
     // Sort in-memory to avoid composite index requirements
     orders.sort((a, b) => b.date.localeCompare(a.date));
     
