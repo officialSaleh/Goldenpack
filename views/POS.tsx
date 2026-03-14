@@ -169,6 +169,7 @@ export const POS: React.FC = () => {
       await db.createOrder(order);
       setLastOrder(order);
       setCart([]);
+      setPaymentReference('');
       setSelectedCustomer(null);
       setIsCartOpen(false);
     } catch (err: any) {
@@ -452,6 +453,19 @@ export const POS: React.FC = () => {
               ))}
             </div>
           </div>
+
+          {paymentType === 'Bank Transfer' && (
+            <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
+              <label className="text-[9px] font-black text-brand-gold uppercase tracking-[0.3em] ml-1">Transfer Reference ID</label>
+              <input 
+                type="text"
+                placeholder="Enter Transaction ID / Ref #"
+                className="w-full px-6 py-4 bg-slate-100 border-none rounded-2xl text-sm font-bold text-brand-dark focus:ring-4 focus:ring-brand-gold/10 outline-none transition-all"
+                value={paymentReference}
+                onChange={(e) => setPaymentReference(e.target.value)}
+              />
+            </div>
+          )}
 
           <div className="flex flex-col md:flex-row gap-4">
             <Button variant="outline" size="lg" className="flex-1 py-5 rounded-[24px]" onClick={() => setShowConfirmModal(false)}>Revise Sale</Button>

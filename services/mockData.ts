@@ -180,12 +180,17 @@ class DB {
   }) {
     if (!this.currentUserId) throw new Error("Unauthenticated request");
     const { search, lastDoc, pageSize = 100 } = options;
+    
+    // If searching, we fetch a larger batch to ensure we find matches
+    // In a real app, we'd use a search index, but for POS, in-memory is more reliable
+    const fetchLimit = search ? 1000 : pageSize;
+
     const constraints: QueryConstraint[] = [
       where("userId", "==", this.currentUserId),
-      limit(pageSize)
+      limit(fetchLimit)
     ];
     
-    if (lastDoc) {
+    if (lastDoc && !search) {
       constraints.push(startAfter(lastDoc));
     }
 
@@ -194,8 +199,7 @@ class DB {
     
     let customers = snapshot.docs
       .map(d => ({ id: d.id, ...d.data() } as Customer))
-      .filter(c => !c.isDeleted)
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .filter(c => !c.isDeleted);
     
     if (search) {
       const lowerSearch = search.toLowerCase();
@@ -206,8 +210,11 @@ class DB {
       );
     }
 
+    // Always sort by name for consistency
+    customers.sort((a, b) => a.name.localeCompare(b.name));
+
     return {
-      customers,
+      customers: search ? customers.slice(0, pageSize) : customers,
       lastVisible: snapshot.docs[snapshot.docs.length - 1]
     };
   }
@@ -221,20 +228,17 @@ class DB {
   }) {
     if (!this.currentUserId) throw new Error("Unauthenticated request");
     const { search, lastDoc, pageSize = 15, month, year } = options;
+    
+    // To avoid "Cloud Fetch Error" (missing indexes), we fetch a larger batch
+    // and filter in-memory. This is more robust for composite queries.
+    const fetchLimit = (search || month !== undefined) ? 500 : pageSize;
+
     const constraints: QueryConstraint[] = [
       where("userId", "==", this.currentUserId),
-      limit(pageSize)
+      limit(fetchLimit)
     ];
     
-    // If month and year are provided, we can add date range constraints
-    if (month !== undefined && year !== undefined) {
-      const startDate = new Date(year, month, 1).toISOString().split('T')[0];
-      const endDate = new Date(year, month + 1, 0).toISOString().split('T')[0] + 'T23:59:59.999Z';
-      constraints.push(where("date", ">=", startDate));
-      constraints.push(where("date", "<=", endDate));
-    }
-    
-    if (lastDoc) {
+    if (lastDoc && !search && month === undefined) {
       constraints.push(startAfter(lastDoc));
     }
 
@@ -242,7 +246,20 @@ class DB {
     const snapshot = await getDocs(q);
     
     let orders = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Order));
+
+    // Sort in-memory to avoid composite index requirements
+    orders.sort((a, b) => b.date.localeCompare(a.date));
     
+    // In-memory filtering for month/year to avoid index requirements
+    if (month !== undefined && year !== undefined) {
+      const startStr = new Date(year, month, 1).toISOString().split('T')[0];
+      const endStr = new Date(year, month + 1, 0).toISOString().split('T')[0];
+      orders = orders.filter(o => {
+        const d = o.date.split('T')[0];
+        return d >= startStr && d <= endStr;
+      });
+    }
+
     if (search) {
       const lowerSearch = search.toLowerCase();
       orders = orders.filter(o => 
@@ -252,7 +269,7 @@ class DB {
     }
 
     return {
-      orders,
+      orders: (search || month !== undefined) ? orders.slice(0, pageSize) : orders,
       lastVisible: snapshot.docs[snapshot.docs.length - 1]
     };
   }
@@ -832,7 +849,7 @@ class DB {
     for (let i = 6; i >= 0; i--) {
       const d = new Date(); d.setDate(d.getDate() - i);
       const ds = d.toISOString().split('T')[0];
-      const rev = this.orders.filter(o => o.date === ds).reduce((s, o) => s + o.total, 0);
+      const rev = this.orders.filter(o => o.date.startsWith(ds)).reduce((s, o) => s + o.total, 0);
       result.push({ name: days[d.getDay()], revenue: rev });
     }
     return result;
@@ -855,11 +872,17 @@ class DB {
     let filteredExpenses = this.expenses;
     
     if (startDate && endDate) {
-      filteredOrders = this.orders.filter(o => o.date >= startDate && o.date <= endDate);
-      filteredExpenses = this.expenses.filter(e => e.date >= startDate && e.date <= endDate);
+      filteredOrders = this.orders.filter(o => {
+        const orderDate = o.date.split('T')[0];
+        return orderDate >= startDate && orderDate <= endDate;
+      });
+      filteredExpenses = this.expenses.filter(e => {
+        const expenseDate = e.date.split('T')[0];
+        return expenseDate >= startDate && expenseDate <= endDate;
+      });
     }
 
-    const todaySales = this.orders.filter(o => o.date === today).reduce((s, o) => s + o.total, 0);
+    const todaySales = this.orders.filter(o => o.date.startsWith(today)).reduce((s, o) => s + o.total, 0);
     const totalRevenue = filteredOrders.reduce((s, o) => s + o.total, 0);
     
     // Calculate total profit from sales (with fallback for old orders)
